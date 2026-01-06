@@ -1,607 +1,1009 @@
 /* =========================================
-   うちの犬 お散歩ダッシュ（障害物よけ）
-   main.js（背景：青空＆草原＆雲 / 障害物：木の柵）
+   わんグル お散歩ダッシュ地獄（障害物よけ）
+   main.js（安定版）
+   - 0-3秒: 柵のみ
+   - 3-8秒: 犬が混ざる（基本1体）
+   - 8秒〜: 犬増加（2体同時も）
+   - 難易度: 時間で速度/出現頻度UP
+   - 結果カード: 読み込んだ犬画像をカード内に描画
+   - 修正: Spaceでも2段ジャンプOK / 敵犬を可愛く犬っぽく
    ========================================= */
 
-// ===== DOM =====
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+(() => {
+  // ===== DOM =====
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
 
-const dogFile = document.getElementById("dogFile");
-const startBtn = document.getElementById("startBtn");
-const retryBtn = document.getElementById("retryBtn");
+  const dogFile = document.getElementById("dogFile");
+  const startBtn = document.getElementById("startBtn");
+  const retryBtn = document.getElementById("retryBtn");
 
-const scoreEl = document.getElementById("score");
-const timeEl = document.getElementById("time");
-const resultEl = document.getElementById("result");
+  const scoreEl = document.getElementById("score");
+  const timeEl = document.getElementById("time");
+  const resultEl = document.getElementById("result");
 
-// ある場合だけ拾う（UIが多少違っても落ちないように）
-const shareText = document.getElementById("shareText");         // textarea（任意）
-const copyBtn = document.getElementById("btnCopyShare");        // 投稿文コピー（任意）
-const saveBtn = document.getElementById("btnSaveCard");         // 結果カード保存（任意）
-const resultCardCanvas = document.getElementById("resultCardCanvas"); // 結果カードcanvas（任意）
+  // 拡散UI（index.html側のIDに合わせる）
+  const shareTextEl = document.getElementById("shareText");
+  const btnCopyShare = document.getElementById("btnCopyShare");
+  const btnSaveCard = document.getElementById("btnSaveCard");
+  const resultCardCanvas = document.getElementById("resultCardCanvas"); // 1200x630 hidden
 
-// ===== ゲーム定数 =====
-const GAME_TIME = 20.0;
-const GRAVITY = 2200;
-const JUMP_V = 860;
-const MOVE_SPEED = 520;
+  // 結果カード表示（無ければJSで作る）
+  let resultCardImg = document.getElementById("resultCardImg");
+  if (!resultCardImg) {
+    resultCardImg = document.createElement("img");
+    resultCardImg.id = "resultCardImg";
+    resultCardImg.alt = "結果カード";
+    resultCardImg.style.width = "100%";
+    resultCardImg.style.display = "block";
+    resultCardImg.style.marginTop = "10px";
+    resultCardImg.style.borderRadius = "14px";
+    resultCardImg.style.border = "1px solid rgba(255,255,255,.10)";
+    resultCardImg.style.background = "rgba(0,0,0,.2)";
 
-const GROUND_Y = 300;
-
-// ===== 状態 =====
-let running = false;
-let ended = false;
-
-let timeLeft = GAME_TIME;
-let score = 0;
-
-let keys = { left:false, right:false };
-
-const player = {
-  x: 120,
-  y: GROUND_Y,
-  w: 48,
-  h: 48,
-  vy: 0,
-  onGround: true,
-  jumpCount: 0,
-};
-
-let obstacles = [];
-let spawnTimer = 0;
-
-// 速度（※ここを触ると体感変わるので固定）
-const OB_SPEED = 360; // px/sec
-const OB_MIN = 0.55;  // sec
-const OB_MAX = 1.10;  // sec
-
-// ===== 犬画像 =====
-const dogImg = new Image();
-let dogImgReady = false;
-
-dogImg.onload = () => { dogImgReady = true; };
-dogImg.onerror = () => { dogImgReady = false; };
-
-// 初期のデフォルト（何も選ばれてない時でも表示しやすい）
-dogImg.src = "";
-
-// ===== 背景（空・草原・雲） =====
-let bgTime = 0;
-let clouds = [];
-let frameDt = 0;
-
-function initClouds(){
-  const n = 7;
-  clouds = [];
-  for(let i=0;i<n;i++){
-    clouds.push({
-      x: Math.random()*canvas.width,
-      y: 30 + Math.random()*110,
-      s: 0.7 + Math.random()*1.2,
-      v: 12 + Math.random()*18,
-    });
-  }
-}
-
-function drawCloud(x,y,scale=1){
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.scale(scale,scale);
-  ctx.globalAlpha = 0.9;
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.beginPath();
-  ctx.arc(18, 22, 18, 0, Math.PI*2);
-  ctx.arc(42, 18, 22, 0, Math.PI*2);
-  ctx.arc(66, 24, 18, 0, Math.PI*2);
-  ctx.arc(46, 32, 22, 0, Math.PI*2);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.globalAlpha = 0.10;
-  ctx.fillStyle = "#0b1220";
-  ctx.beginPath();
-  ctx.ellipse(44, 42, 44, 10, 0, 0, Math.PI*2);
-  ctx.fill();
-
-  ctx.restore();
-}
-
-function drawBackground(dt){
-  // 空
-  const g = ctx.createLinearGradient(0,0,0,canvas.height);
-  g.addColorStop(0, "#8bd3ff");
-  g.addColorStop(0.55, "#4aa7ff");
-  g.addColorStop(1, "#0b4b8a");
-  ctx.fillStyle = g;
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  // 太陽
-  ctx.globalAlpha = 0.35;
-  ctx.fillStyle = "#fff3b0";
-  ctx.beginPath();
-  ctx.arc(canvas.width-90, 80, 46, 0, Math.PI*2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // 雲
-  bgTime += dt;
-  for(const c of clouds){
-    c.x -= c.v * dt;
-    if(c.x < -120) c.x = canvas.width + 120 + Math.random()*160;
-    drawCloud(c.x, c.y, c.s);
+    // なるべく shareBox の下に出す
+    const shareBox = shareTextEl?.closest(".shareBox") || null;
+    const insertTarget = shareBox?.parentElement || document.body;
+    insertTarget.appendChild(resultCardImg);
   }
 
-  // 遠景の丘
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = "#1d8a4a";
-  ctx.beginPath();
-  ctx.ellipse(140, canvas.height-40, 240, 90, 0, 0, Math.PI*2);
-  ctx.ellipse(520, canvas.height-46, 300, 110, 0, 0, Math.PI*2);
-  ctx.ellipse(820, canvas.height-38, 260, 95, 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  // ===== 基本設定 =====
+  const W = canvas.width;
+  const H = canvas.height;
 
-  // 草地
-  const grassY = GROUND_Y + player.h;
-  const gg = ctx.createLinearGradient(0, grassY-40, 0, canvas.height);
-  gg.addColorStop(0, "#3bd36b");
-  gg.addColorStop(1, "#147a3b");
-  ctx.fillStyle = gg;
-  ctx.fillRect(0, grassY, canvas.width, canvas.height - grassY);
+  const GROUND_H = 52;
+  const groundY = H - GROUND_H;
 
-  // 地面の流れる筋（スピード感）
-  ctx.globalAlpha = 0.20;
-  ctx.fillStyle = "#0f5f30";
-  const stripeH = 6;
-  const speed = 160;
-  const off = (bgTime*speed) % 80;
-  for(let x=-80; x<canvas.width+80; x+=80){
-    ctx.fillRect(x - off, grassY + 18, 40, stripeH);
-    ctx.fillRect(x - off + 18, grassY + 48, 34, stripeH);
+  const GRAV = 1600;
+  const JUMP_V = 720;
+  const MOVE_V = 360;
+
+  // ===== ゲーム状態 =====
+  let raf = 0;
+  let lastT = 0;
+
+  let running = false;
+  let gameOver = false;
+
+  let elapsed = 0;
+  let avoided = 0;
+  let score = 0;
+
+  let obstacles = [];
+  let spawnTimer = 0;
+
+  // 入力
+  const keys = new Set();
+  let pointerDown = false;
+  let pointerX = 0;
+
+  // 犬画像（プレイヤー）
+  let dogImg = new Image();
+  let dogImgReady = false;
+  let dogImgUrl = "";
+
+  // プレイヤー
+  const player = {
+    x: W * 0.20,
+    y: groundY - 44,
+    w: 44,
+    h: 44,
+    vx: 0,
+    vy: 0,
+    onGround: true,
+    jumpsLeft: 2,
+  };
+
+  // ===== ヘルパ =====
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const randi = (a, b) => Math.floor(rand(a, b + 1));
+
+  function updateHUD() {
+    if (timeEl) timeEl.textContent = elapsed.toFixed(1);
+    if (scoreEl) scoreEl.textContent = String(score);
   }
-  ctx.globalAlpha = 1;
-}
 
-// ===== 障害物（木の柵） =====
-function drawFence(o){
-  const x = o.x, y = o.y, w = o.w, h = o.h;
+  function resetGameState() {
+    elapsed = 0;
+    avoided = 0;
+    score = 0;
 
-  // 影
-  ctx.globalAlpha = 0.25;
-  ctx.fillStyle = "#000";
-  ctx.fillRect(x+2, y+h-6, w, 6);
-  ctx.globalAlpha = 1;
+    obstacles = [];
+    spawnTimer = 0;
 
-  const wood = ctx.createLinearGradient(x, y, x+w, y+h);
-  wood.addColorStop(0, "#b68652");
-  wood.addColorStop(0.5, "#a46f3d");
-  wood.addColorStop(1, "#8a5a2f");
+    player.x = W * 0.20;
+    player.y = groundY - player.h;
+    player.vx = 0;
+    player.vy = 0;
+    player.onGround = true;
+    player.jumpsLeft = 2;
 
-  const postW = Math.max(6, Math.floor(w*0.22));
-  ctx.fillStyle = wood;
+    running = false;
+    gameOver = false;
+    lastT = 0;
 
-  // 柱
-  ctx.fillRect(x, y, postW, h);
-  ctx.fillRect(x+w-postW, y, postW, h);
+    updateHUD();
+    if (resultEl) resultEl.textContent = "";
+    if (shareTextEl) shareTextEl.value = "";
+    if (resultCardImg) resultCardImg.src = "";
+  }
 
-  // 横板
-  const railH = Math.max(6, Math.floor(h*0.22));
-  const railPad = Math.floor(postW*0.6);
-  ctx.fillRect(x+railPad, y+Math.floor(h*0.22), w-railPad*2, railH);
-  ctx.fillRect(x+railPad, y+Math.floor(h*0.56), w-railPad*2, railH);
+  function difficultyFactor(t) {
+    // 時間でじわじわ上げる（速すぎを防ぐために上限あり）
+    const a = 1 + (Math.min(t, 40) / 40) * 1.2; // 最大2.2倍
+    const b = t > 12 ? 1 + (Math.min(t - 12, 25) / 25) * 0.35 : 1; // 追加で最大1.35倍
+    return a * b;
+  }
 
-  // 釘
-  ctx.fillStyle = "rgba(20,10,0,0.35)";
-  for(const px of [x+postW-3, x+w-postW+3]){
-    for(const py of [y+Math.floor(h*0.30), y+Math.floor(h*0.64)]){
+  function phase(t) {
+    if (t < 3) return 0;  // 柵のみ
+    if (t < 8) return 1;  // 犬混ざる
+    return 2;             // 犬増える
+  }
+
+  // ===== 入力（ジャンプ）=====
+  function doJump() {
+    if (!running || gameOver) return;
+    if (player.jumpsLeft > 0) {
+      player.vy = -JUMP_V;
+      player.onGround = false;
+      player.jumpsLeft -= 1;
+    }
+  }
+
+  // ===== 描画（背景/地面） =====
+  function drawBackground() {
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#7fd1ff");
+    sky.addColorStop(0.55, "#bfeaff");
+    sky.addColorStop(1, "#e9fbff");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    drawCloud(90, 70, 1.0);
+    drawCloud(320, 55, 0.85);
+    drawCloud(560, 85, 1.15);
+
+    ctx.fillStyle = "rgba(30,170,90,.22)";
+    ctx.beginPath();
+    ctx.moveTo(0, groundY - 40);
+    ctx.quadraticCurveTo(W * 0.25, groundY - 80, W * 0.50, groundY - 45);
+    ctx.quadraticCurveTo(W * 0.75, groundY - 10, W, groundY - 60);
+    ctx.lineTo(W, groundY);
+    ctx.lineTo(0, groundY);
+    ctx.closePath();
+    ctx.fill();
+
+    const grass = ctx.createLinearGradient(0, groundY - 10, 0, H);
+    grass.addColorStop(0, "#42c46a");
+    grass.addColorStop(1, "#17934a");
+    ctx.fillStyle = grass;
+    ctx.fillRect(0, groundY, W, GROUND_H);
+
+    ctx.fillStyle = "rgba(255,255,255,.22)";
+    ctx.fillRect(0, groundY, W, 6);
+
+    ctx.strokeStyle = "rgba(0,0,0,.08)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 18; i++) {
+      const y = groundY + 10 + i * 2;
       ctx.beginPath();
-      ctx.arc(px, py, 2, 0, Math.PI*2);
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(0,0,0,.35)";
+    ctx.font = "700 12px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillText("わんグル / dognavi.com", 12, 18);
+  }
+
+  function drawCloud(x, y, s) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "rgba(255,255,255,.90)";
+    blob(-30, 0, 30);
+    blob(0, -10, 34);
+    blob(28, 0, 26);
+    blob(8, 12, 28);
+    ctx.restore();
+
+    function blob(cx, cy, r) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // 縁
-  ctx.strokeStyle = "rgba(0,0,0,0.25)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x+1, y+1, w-2, h-2);
-}
-
-// ===== 便利 =====
-function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-
-function rectHit(a,b){
-  return (
-    a.x < b.x + b.w &&
-    a.x + a.w > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.h > b.y
-  );
-}
-
-function setResult(text){
-  if(resultEl) resultEl.textContent = text;
-}
-
-function updateHUD(){
-  scoreEl.textContent = String(score);
-  timeEl.textContent = String(Math.max(0, timeLeft).toFixed(1));
-}
-
-// ===== 入力 =====
-function jump(){
-  if(!running || ended) return;
-
-  if(player.onGround){
-    player.vy = -JUMP_V;
-    player.onGround = false;
-    player.jumpCount = 1;
-    return;
-  }
-  // 2段ジャンプ
-  if(player.jumpCount < 2){
-    player.vy = -JUMP_V * 0.92;
-    player.jumpCount++;
-  }
-}
-
-window.addEventListener("keydown", (e) => {
-  if(e.code === "ArrowLeft" || e.code === "KeyA") keys.left = true;
-  if(e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
-  if(e.code === "Space") { e.preventDefault(); jump(); }
-});
-
-window.addEventListener("keyup", (e) => {
-  if(e.code === "ArrowLeft" || e.code === "KeyA") keys.left = false;
-  if(e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
-});
-
-canvas.addEventListener("pointerdown", () => jump());
-
-// ===== 画像読み込み =====
-dogFile?.addEventListener("change", (e) => {
-  const file = e.target.files?.[0];
-  if(!file) return;
-  const url = URL.createObjectURL(file);
-  dogImgReady = false;
-  dogImg.onload = () => {
-    dogImgReady = true;
-    URL.revokeObjectURL(url);
-  };
-  dogImg.onerror = () => {
-    dogImgReady = false;
-    URL.revokeObjectURL(url);
-  };
-  dogImg.src = url;
-});
-
-// ===== ゲーム制御 =====
-function resetGame(){
-  running = false;
-  ended = false;
-  timeLeft = GAME_TIME;
-  score = 0;
-
-  player.x = 120;
-  player.y = GROUND_Y;
-  player.vy = 0;
-  player.onGround = true;
-  player.jumpCount = 0;
-
-  obstacles = [];
-  spawnTimer = 0;
-
-  // 背景初期化
-  bgTime = 0;
-  initClouds();
-
-  updateHUD();
-  setResult("");
-
-  if(shareText) shareText.value = "";
-}
-
-function startGame(){
-  resetGame();
-  running = true;
-}
-
-function endGame(reason="TIMEUP"){
-  if(ended) return;
-  ended = true;
-  running = false;
-
-  const rank = calcRank(score);
-  const title = rankTitle(rank, score);
-
-  const resText = `SCORE ${score}（${reason==="HIT" ? "ドボン" : "完走"}）`;
-  setResult(resText);
-
-  // 拡散用文面
-  const share = makeShareText(score, rank, title, reason);
-  if(shareText) shareText.value = share;
-
-  // 結果カード描画
-  drawResultCard({
-    score,
-    rank,
-    title,
-    reason,
-    dogReady: dogImgReady,
-  });
-
-  updateHUD();
-}
-
-startBtn?.addEventListener("click", startGame);
-retryBtn?.addEventListener("click", startGame);
-
-// ===== 障害物生成 =====
-function spawnObstacle(){
-  obstacles.push({
-    x: canvas.width + 10,
-    y: GROUND_Y + player.h - 40, // 地面上に置く
-    w: 32,
-    h: 40,
-    passed:false,
-  });
-}
-
-// ===== ランク/称号/煽り文 =====
-function calcRank(s){
-  if(s >= 1200) return "SSS";
-  if(s >= 900) return "SS";
-  if(s >= 650) return "S";
-  if(s >= 450) return "A";
-  if(s >= 300) return "B";
-  if(s >= 180) return "C";
-  return "D";
-}
-
-function rankTitle(rank, s){
-  const map = {
-    "SSS":"天才回避犬",
-    "SS":"神回避犬",
-    "S":"疾風回避犬",
-    "A":"上手い犬",
-    "B":"なかなか犬",
-    "C":"起きたて犬",
-    "D":"寝起き犬",
-  };
-  return map[rank] || "犬";
-}
-
-function spicyLine(rank, reason){
-  if(reason === "HIT"){
-    const hit = [
-      "柵に激突…でも伸びしろしかない。",
-      "当たった…だが挑戦はここから。",
-      "ドボン！次は“回避犬”になろう。",
-    ];
-    return hit[Math.floor(Math.random()*hit.length)];
-  }
-  const ok = [
-    "完走！この安定感、年末ラリー向き。",
-    "完走お見事。回避力は正義。",
-    "最後まで逃げ切った。強い。",
-  ];
-  return ok[Math.floor(Math.random()*ok.length)];
-}
-
-function makeShareText(s, rank, title, reason){
-  const line = spicyLine(rank, reason);
-  return `🐶 うちの犬 お散歩ダッシュ！（障害物よけ）\n` +
-         `RANK ${rank}：${title}\n` +
-         `SCORE ${s}（${reason==="HIT" ? "ドボン" : "完走"}）\n` +
-         `${line}\n\n` +
-         `#うちの犬チャレンジ #お散歩ダッシュ`;
-}
-
-// ===== ループ =====
-let lastTs = 0;
-
-function update(dt){
-  if(!running || ended) return;
-
-  timeLeft -= dt;
-  if(timeLeft <= 0){
-    timeLeft = 0;
-    endGame("TIMEUP");
-    return;
+  // ===== 障害物生成 =====
+  function pickDogType(t) {
+    // ちょい可愛い寄り。チワワは増えやすい（鬱陶しい）
+    if (t < 10) {
+      const r = Math.random();
+      if (r < 0.35) return "big";
+      if (r < 0.65) return "weird";
+      return "chi";
+    } else {
+      const r = Math.random();
+      if (r < 0.25) return "big";
+      if (r < 0.50) return "weird";
+      return "chi";
+    }
   }
 
-  // 左右移動
-  let vx = 0;
-  if(keys.left) vx -= MOVE_SPEED;
-  if(keys.right) vx += MOVE_SPEED;
-  player.x = clamp(player.x + vx*dt, 0, canvas.width - player.w);
+  function spawnOne(typeOverride = null) {
+    const t = elapsed;
+    const p = phase(t);
 
-  // 重力
-  player.vy += GRAVITY * dt;
-  player.y += player.vy * dt;
-
-  // 地面
-  const groundTop = GROUND_Y;
-  if(player.y >= groundTop){
-    player.y = groundTop;
-    player.vy = 0;
-    player.onGround = true;
-    player.jumpCount = 0;
-  }else{
-    player.onGround = false;
-  }
-
-  // 障害物出現
-  spawnTimer += dt;
-  const next = OB_MIN + Math.random()*(OB_MAX - OB_MIN);
-  if(spawnTimer >= next){
-    spawnTimer = 0;
-    spawnObstacle();
-  }
-
-  // 障害物移動＆判定
-  for(const o of obstacles){
-    o.x -= OB_SPEED * dt;
-
-    // 通過でスコア
-    if(!o.passed && o.x + o.w < player.x){
-      o.passed = true;
-      score += 10;
+    let type = typeOverride;
+    if (!type) {
+      if (p === 0) type = "fence";
+      else if (p === 1) type = Math.random() < 0.60 ? pickDogType(t) : "fence";
+      else {
+        const r = Math.random();
+        if (r < 0.70) type = pickDogType(t);
+        else type = "fence";
+      }
     }
 
-    // ヒット
-    if(rectHit(player, o)){
-      endGame("HIT");
+    const df = difficultyFactor(t);
+    const baseSpeed = 220 * df;
+
+    if (type === "fence") {
+      const h = randi(44, 78);
+      const w = randi(42, 60);
+      obstacles.push({
+        type,
+        x: W + 20,
+        y: groundY - h,
+        w,
+        h,
+        vx: baseSpeed,
+        passed: false,
+      });
+      return;
+    }
+
+    if (type === "big") {
+      const w = 68, h = 56;
+      obstacles.push({
+        type,
+        x: W + 20,
+        y: groundY - h,
+        w, h,
+        vx: baseSpeed * 0.92,
+        passed: false,
+        wobble: 0,
+      });
+      return;
+    }
+
+    if (type === "chi") {
+      const w = 48, h = 40;
+      obstacles.push({
+        type,
+        x: W + 20,
+        y: groundY - h - randi(0, 12),
+        w, h,
+        vx: baseSpeed * 1.22,
+        passed: false,
+        wobble: 0,
+      });
+      return;
+    }
+
+    if (type === "weird") {
+      const w = 56, h = 46;
+      const baseY = groundY - h - randi(12, 50);
+      obstacles.push({
+        type,
+        x: W + 20,
+        y: baseY,
+        baseY,
+        w, h,
+        vx: baseSpeed * 1.04,
+        passed: false,
+        wobble: rand(0, Math.PI * 2),
+      });
       return;
     }
   }
 
-  // 画面外を捨てる
-  obstacles = obstacles.filter(o => o.x + o.w > -40);
+  function updateSpawns(dt) {
+    const t = elapsed;
+    const df = difficultyFactor(t);
 
-  updateHUD();
-}
+    let baseInterval;
+    if (t < 3) baseInterval = 0.85;
+    else if (t < 8) baseInterval = 0.65;
+    else baseInterval = 0.55;
 
-function draw() {
-  // 背景（空・雲・草原）
-  drawBackground(frameDt);
+    const interval = clamp(baseInterval / df, 0.26, 0.95);
 
-  // プレイヤーの影
-  const groundY = GROUND_Y + player.h;
-  ctx.globalAlpha = 0.25;
-  ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.ellipse(player.x + player.w*0.5, groundY + 6, player.w*0.38, 6, 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnOne();
 
-  // 障害物（木の柵）
-  for (const o of obstacles) {
-    drawFence(o);
+      // 8秒以降はたまに2体目
+      if (t >= 8) {
+        const multiChance = clamp(0.10 + (t - 8) * 0.012, 0.10, 0.38);
+        if (Math.random() < multiChance) {
+          const offset = clamp(0.22 - (df - 1) * 0.03, 0.10, 0.22);
+          setTimeout(() => {
+            if (running && !gameOver) spawnOne(pickDogType(elapsed));
+          }, offset * 1000);
+        }
+      }
+
+      spawnTimer = interval + rand(-0.10, 0.12);
+      spawnTimer = clamp(spawnTimer, 0.22, 1.20);
+    }
   }
 
-  // 犬（画像 or 絵文字）
-  if (dogImgReady) {
-    const r = 10;
+  // ===== 当たり判定 =====
+  function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  function hitTestPlayerObs(obs) {
+    const padP = 4;
+    const padO = 4;
+
+    const px = player.x + padP;
+    const py = player.y + padP;
+    const pw = player.w - padP * 2;
+    const ph = player.h - padP * 2;
+
+    const ox = obs.x + padO;
+    const oy = obs.y + padO;
+    const ow = obs.w - padO * 2;
+    const oh = obs.h - padO * 2;
+
+    return aabb(px, py, pw, ph, ox, oy, ow, oh);
+  }
+
+  // ===== 角丸パス =====
+  function roundRectPath(x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  // ===== プレイヤー描画 =====
+  function drawPlayer() {
+    // 影
+    ctx.fillStyle = "rgba(0,0,0,.18)";
+    ctx.beginPath();
+    ctx.ellipse(player.x + player.w / 2, groundY + 10, 18, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const x = player.x, y = player.y, w = player.w, h = player.h;
+
+    // 白フチ
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(player.x + r, player.y);
-    ctx.arcTo(player.x + player.w, player.y, player.x + player.w, player.y + player.h, r);
-    ctx.arcTo(player.x + player.w, player.y + player.h, player.x, player.y + player.h, r);
-    ctx.arcTo(player.x, player.y + player.h, player.x, player.y, r);
-    ctx.arcTo(player.x, player.y, player.x + player.w, player.y, r);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(dogImg, player.x, player.y, player.w, player.h);
+    roundRectPath(x - 2, y - 2, w + 4, h + 4, 12);
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fill();
     ctx.restore();
 
-    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    if (dogImgReady) {
+      ctx.save();
+      ctx.beginPath();
+      roundRectPath(x, y, w, h, 10);
+      ctx.clip();
+      ctx.drawImage(dogImg, x, y, w, h);
+      ctx.restore();
+    } else {
+      // 代替の犬アイコン
+      ctx.save();
+      ctx.beginPath();
+      roundRectPath(x, y, w, h, 10);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+
+      ctx.fillStyle = "#f4c9a5";
+      ctx.beginPath();
+      ctx.arc(x + w * 0.52, y + h * 0.58, w * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#d89a6e";
+      ctx.beginPath();
+      ctx.ellipse(x + w * 0.34, y + h * 0.38, w * 0.12, h * 0.16, -0.5, 0, Math.PI * 2);
+      ctx.ellipse(x + w * 0.62, y + h * 0.34, w * 0.12, h * 0.16, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#111";
+      ctx.beginPath();
+      ctx.arc(x + w * 0.45, y + h * 0.55, 2.3, 0, Math.PI * 2);
+      ctx.arc(x + w * 0.59, y + h * 0.55, 2.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(0,0,0,.45)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x + w * 0.52, y + h * 0.63, 6, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // ===== 障害物描画 =====
+  function drawObstacle(o) {
+    if (o.type === "fence") return drawFence(o);
+    if (o.type === "big") return drawDogEnemy(o, "big");
+    if (o.type === "chi") return drawDogEnemy(o, "chi");
+    if (o.type === "weird") return drawDogEnemy(o, "weird");
+  }
+
+  function drawFence(o) {
+    const x = o.x, y = o.y, w = o.w, h = o.h;
+
+    // 影
+    ctx.fillStyle = "rgba(0,0,0,.16)";
+    ctx.fillRect(x + 3, y + 6, w, h);
+
+    // 木
+    const wood = ctx.createLinearGradient(x, y, x + w, y + h);
+    wood.addColorStop(0, "#b9834b");
+    wood.addColorStop(1, "#8a5d33");
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    roundRectPath(x, y, w, h, 10);
+    ctx.fill();
+
+    // 木目
+    ctx.strokeStyle = "rgba(0,0,0,.18)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(player.x, player.y, player.w, player.h);
-  } else {
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "28px system-ui, sans-serif";
-    ctx.fillText("🐶", player.x + 4, player.y + 30);
+    for (let i = 0; i < 4; i++) {
+      const yy = y + 10 + i * (h / 4);
+      ctx.beginPath();
+      ctx.moveTo(x + 8, yy);
+      ctx.lineTo(x + w - 8, yy + rand(-2, 2));
+      ctx.stroke();
+    }
+
+    // ハイライト
+    ctx.fillStyle = "rgba(255,255,255,.18)";
+    ctx.beginPath();
+    roundRectPath(x + 3, y + 3, w - 6, 10, 8);
+    ctx.fill();
   }
 
-  // ヒント
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.fillRect(14, 14, 240, 26);
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "12px system-ui, sans-serif";
-  ctx.fillText("←→ or A/Dで移動 / クリック・Spaceでジャンプ", 22, 32);
-}
+  // ===== 可愛い敵犬描画 =====
+  function drawDogEnemy(o, kind) {
+    const x = o.x, y = o.y, w = o.w, h = o.h;
 
-function loop(ts){
-  if(!lastTs) lastTs = ts;
-  const dt = Math.min(0.033, (ts - lastTs) / 1000);
-  frameDt = dt;
-  lastTs = ts;
+    // 影
+    ctx.fillStyle = "rgba(0,0,0,.18)";
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, groundY + 10, w * 0.34, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-  update(dt);
-  draw();
+    // 本体グラデ
+    let bodyGrad;
+    if (kind === "big") {
+      bodyGrad = ctx.createLinearGradient(x, y, x + w, y + h);
+      bodyGrad.addColorStop(0, "#fff3dd");
+      bodyGrad.addColorStop(1, "#f2b989");
+    } else if (kind === "chi") {
+      bodyGrad = ctx.createLinearGradient(x, y, x + w, y + h);
+      bodyGrad.addColorStop(0, "#ffe6ec");
+      bodyGrad.addColorStop(1, "#ff6f8a");
+    } else {
+      bodyGrad = ctx.createLinearGradient(x, y, x + w, y + h);
+      bodyGrad.addColorStop(0, "#e6fbff");
+      bodyGrad.addColorStop(1, "#6ad0ff");
+    }
 
-  requestAnimationFrame(loop);
-}
+    // 体（丸角）
+    ctx.save();
+    ctx.beginPath();
+    roundRectPath(x, y, w, h, 16);
+    ctx.fillStyle = bodyGrad;
+    ctx.fill();
 
-// ===== 結果カード描画 =====
-function drawResultCard({score, rank, title, reason, dogReady}){
-  if(!resultCardCanvas) return;
-  const c = resultCardCanvas.getContext("2d");
+    // ほっぺ（可愛さ）
+    ctx.fillStyle = "rgba(255,140,160,.35)";
+    ctx.beginPath();
+    ctx.arc(x + w * 0.30, y + h * 0.60, w * 0.10, 0, Math.PI * 2);
+    ctx.arc(x + w * 0.70, y + h * 0.60, w * 0.10, 0, Math.PI * 2);
+    ctx.fill();
 
-  c.clearRect(0,0,1200,630);
+    // 耳（犬っぽく）
+    ctx.fillStyle = "rgba(0,0,0,.10)";
+    ctx.beginPath();
+    ctx.ellipse(x + w * 0.22, y + h * 0.22, w * 0.13, h * 0.20, -0.8, 0, Math.PI * 2);
+    ctx.ellipse(x + w * 0.78, y + h * 0.22, w * 0.13, h * 0.20, 0.8, 0, Math.PI * 2);
+    ctx.fill();
 
-  // 背景
-  const bg = c.createLinearGradient(0,0,0,630);
-  bg.addColorStop(0, "#0b1b3a");
-  bg.addColorStop(1, "#071024");
-  c.fillStyle = bg;
-  c.fillRect(0,0,1200,630);
+    // 目（キラ）
+    const eyeY = y + h * 0.45;
+    ctx.fillStyle = "#141414";
+    ctx.beginPath();
+    ctx.arc(x + w * 0.38, eyeY, 3.0, 0, Math.PI * 2);
+    ctx.arc(x + w * 0.62, eyeY, 3.0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.beginPath();
+    ctx.arc(x + w * 0.36, eyeY - 1.0, 1.1, 0, Math.PI * 2);
+    ctx.arc(x + w * 0.60, eyeY - 1.0, 1.1, 0, Math.PI * 2);
+    ctx.fill();
 
-  // タイトル
-  c.fillStyle = "#fff";
-  c.font = "800 56px system-ui, sans-serif";
-  c.fillText("うちの犬 お散歩ダッシュ", 64, 110);
+    // 鼻
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.beginPath();
+    ctx.arc(x + w * 0.50, y + h * 0.56, 2.6, 0, Math.PI * 2);
+    ctx.fill();
 
-  // スコア
-  c.font = "900 88px system-ui, sans-serif";
-  c.fillText(`SCORE ${score}`, 64, 260);
+    // 口（にこ）
+    ctx.strokeStyle = "rgba(0,0,0,.45)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x + w * 0.50, y + h * 0.64, 8, 0.2, Math.PI - 0.2);
+    ctx.stroke();
 
-  // ランク
-  c.font = "900 100px system-ui, sans-serif";
-  c.fillText(`${rank}`, 64, 380);
+    // しっぽ（犬っぽさ）
+    ctx.strokeStyle = "rgba(0,0,0,.14)";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    const tx = x + w * 0.92;
+    const ty = y + h * 0.58;
+    ctx.moveTo(tx, ty);
+    ctx.quadraticCurveTo(tx + w * 0.12, ty - h * 0.10, tx + w * 0.05, ty - h * 0.26);
+    ctx.stroke();
 
-  c.font = "800 40px system-ui, sans-serif";
-  c.fillStyle = "rgba(255,255,255,0.90)";
-  c.fillText(`${title}`, 64, 450);
+    // 種別で個性
+    if (kind === "chi") {
+      // チワワは眉毛＋ちょい牙（可愛いムカつき）
+      ctx.strokeStyle = "rgba(0,0,0,.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.28, y + h * 0.36);
+      ctx.lineTo(x + w * 0.44, y + h * 0.40);
+      ctx.moveTo(x + w * 0.72, y + h * 0.36);
+      ctx.lineTo(x + w * 0.56, y + h * 0.40);
+      ctx.stroke();
 
-  c.font = "700 28px system-ui, sans-serif";
-  c.fillStyle = "rgba(255,255,255,0.75)";
-  c.fillText(`#うちの犬チャレンジ  #お散歩ダッシュ`, 64, 560);
+      ctx.fillStyle = "rgba(255,255,255,.95)";
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.46, y + h * 0.70);
+      ctx.lineTo(x + w * 0.50, y + h * 0.78);
+      ctx.lineTo(x + w * 0.54, y + h * 0.70);
+      ctx.closePath();
+      ctx.fill();
+    }
 
-  // 犬画像（右側）
-  if(dogReady){
-    // 角丸枠
-    const x=860, y=210, w=260, h=260, r=32;
-    c.save();
-    c.beginPath();
-    c.moveTo(x+r, y);
-    c.arcTo(x+w, y, x+w, y+h, r);
-    c.arcTo(x+w, y+h, x, y+h, r);
-    c.arcTo(x, y+h, x, y, r);
-    c.arcTo(x, y, x+w, y, r);
-    c.closePath();
-    c.clip();
-    c.drawImage(dogImg, x, y, w, h);
-    c.restore();
+    if (kind === "weird") {
+      // 変な犬＝ブチ柄＋舌
+      ctx.fillStyle = "rgba(0,0,0,.10)";
+      ctx.beginPath();
+      ctx.ellipse(x + w * 0.35, y + h * 0.30, w * 0.11, h * 0.10, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(x + w * 0.65, y + h * 0.28, w * 0.12, h * 0.12, -0.4, 0, Math.PI * 2);
+      ctx.ellipse(x + w * 0.52, y + h * 0.78, w * 0.13, h * 0.10, 0.1, 0, Math.PI * 2);
+      ctx.fill();
 
-    c.strokeStyle = "rgba(255,255,255,0.25)";
-    c.lineWidth = 6;
-    c.strokeRect(x, y, w, h);
-  }else{
-    c.font = "120px system-ui, sans-serif";
-    c.fillStyle = "#fff";
-    c.fillText("🐶", 930, 380);
+      ctx.fillStyle = "rgba(255,90,120,.85)";
+      ctx.beginPath();
+      ctx.ellipse(x + w * 0.52, y + h * 0.72, w * 0.07, h * 0.10, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ラベル（小さめ）
+    ctx.fillStyle = "rgba(0,0,0,.35)";
+    ctx.font = "800 10px system-ui, -apple-system, Segoe UI, sans-serif";
+    const label = kind === "big" ? "大型犬" : kind === "chi" ? "凶暴チワワ" : "変な犬";
+    ctx.fillText(label, x + 6, y + h - 8);
+
+    ctx.restore();
   }
-}
 
-// ===== 拡散UI =====
-copyBtn?.addEventListener("click", async () => {
-  try{
-    await navigator.clipboard.writeText(shareText?.value || "");
-  }catch(e){}
-});
+  // ===== プレイヤー更新 =====
+  function updatePlayer(dt) {
+    let dir = 0;
+    if (keys.has("ArrowLeft") || keys.has("a") || keys.has("A")) dir -= 1;
+    if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) dir += 1;
 
-saveBtn?.addEventListener("click", () => {
-  if(!resultCardCanvas) return;
-  const a = document.createElement("a");
-  a.href = resultCardCanvas.toDataURL("image/png");
-  a.download = "dog-dash-result.png";
-  a.click();
-});
+    // タップ長押し移動（指の位置に寄せる）
+    if (pointerDown) {
+      const rect = canvas.getBoundingClientRect();
+      const target = ((pointerX - rect.left) / rect.width) * W;
+      const center = player.x + player.w / 2;
+      const diff = target - center;
+      if (Math.abs(diff) > 10) dir = diff > 0 ? 1 : -1;
+    }
 
-// 初期化
-resetGame();
-requestAnimationFrame(loop);
+    player.vx = dir * MOVE_V;
+
+    player.x += player.vx * dt;
+    player.x = clamp(player.x, 8, W - player.w - 8);
+
+    player.vy += GRAV * dt;
+    player.y += player.vy * dt;
+
+    if (player.y >= groundY - player.h) {
+      player.y = groundY - player.h;
+      player.vy = 0;
+      if (!player.onGround) {
+        player.onGround = true;
+        player.jumpsLeft = 2;
+      }
+    } else {
+      player.onGround = false;
+    }
+  }
+
+  // ===== 障害物更新 =====
+  function updateObstacles(dt) {
+    for (const o of obstacles) {
+      o.x -= o.vx * dt;
+
+      if (o.type === "weird") {
+        o.wobble += dt * 4.2;
+        o.y = o.baseY + Math.sin(o.wobble) * 18;
+        o.y = clamp(o.y, 40, groundY - o.h);
+      }
+    }
+
+    for (const o of obstacles) {
+      if (!o.passed && o.x + o.w < player.x) {
+        o.passed = true;
+        avoided += 1;
+      }
+    }
+
+    obstacles = obstacles.filter(o => o.x + o.w > -40);
+
+    score = avoided * 10 + Math.floor(elapsed * 5);
+
+    for (const o of obstacles) {
+      if (hitTestPlayerObs(o)) {
+        endGame("crash");
+        break;
+      }
+    }
+  }
+
+  // ===== ループ更新 =====
+  function update(dt) {
+    if (!running || gameOver) return;
+
+    elapsed += dt;
+    updateSpawns(dt);
+    updatePlayer(dt);
+    updateObstacles(dt);
+    updateHUD();
+  }
+
+  function render() {
+    drawBackground();
+    for (const o of obstacles) drawObstacle(o);
+    drawPlayer();
+
+    ctx.fillStyle = "rgba(0,0,0,.35)";
+    ctx.font = "800 12px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillText("←/→ or A/Dで移動 / クリック・Spaceでジャンプ（2段）", 14, 36);
+
+    if (!running && !gameOver) {
+      ctx.fillStyle = "rgba(0,0,0,.35)";
+      ctx.font = "900 18px system-ui, -apple-system, Segoe UI, sans-serif";
+      ctx.fillText("スタートを押してね！🐾", 14, 60);
+    }
+
+    if (gameOver) {
+      ctx.fillStyle = "rgba(0,0,0,.35)";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "rgba(255,255,255,.92)";
+      ctx.font = "900 28px system-ui, -apple-system, Segoe UI, sans-serif";
+      ctx.fillText("GAME OVER", 14, 70);
+      ctx.font = "800 14px system-ui, -apple-system, Segoe UI, sans-serif";
+      ctx.fillText("リトライで再挑戦！", 14, 95);
+    }
+  }
+
+  function loop(ts) {
+    if (!lastT) lastT = ts;
+    const dt = Math.min(0.033, (ts - lastT) / 1000);
+    lastT = ts;
+
+    if (running && !gameOver) update(dt);
+    render();
+
+    raf = requestAnimationFrame(loop);
+  }
+
+  // ===== 結果・ランク =====
+  function calcRank(sc, sec) {
+    const v = sec * 10 + sc * 0.6;
+    if (v < 80)  return { rank: "E", title: "初めてのお散歩" };
+    if (v < 140) return { rank: "D", title: "リード絡まり" };
+    if (v < 210) return { rank: "C", title: "公園常連" };
+    if (v < 300) return { rank: "B", title: "犬慣れしてきた" };
+    if (v < 420) return { rank: "A", title: "ドッグラン覇者" };
+    if (v < 560) return { rank: "S", title: "わんグル公認散歩犬" };
+    return { rank: "SSS", title: "伝説の散歩犬" };
+  }
+
+  function pickComment(rank) {
+    const map = {
+      "E": ["散歩開始3秒で終了は草。", "まだ玄関で転んでる。", "まずリード持とう。"],
+      "D": ["リード絡まり職人。", "犬に犬でやられた。", "今日の敵は自分。"],
+      "C": ["公園なら勝てる。…たぶん。", "犬密度が高すぎる。", "まだ逃げ切れてる説。"],
+      "B": ["犬慣れしてきた（なおチワワ）。", "散歩とは戦い。", "いい反射神経してる。"],
+      "A": ["ドッグランで王になれる。", "大型犬も怖くない。", "わんグル適性高め。"],
+      "S": ["チワワ？何それ。", "わんグル公認でOK。", "犬社会を支配してる。"],
+      "SSS": ["あなたが散歩、そのもの。", "犬の世界線を超えた。", "散歩の神、降臨。"],
+    };
+    const arr = map[rank] || ["また来てね！"];
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function buildShareText(rankObj, sec, sc, comment) {
+    const secTxt = sec.toFixed(1) + "秒";
+    return `🐾 わんグル お散歩ダッシュ地獄\n\nRANK：${rankObj.rank}（${rankObj.title}）\nTIME：${secTxt}\nSCORE：${sc}\n\n${comment}\n#わんグル #犬ゲー #お散歩ダッシュ`;
+  }
+
+  // ===== 結果カード生成 =====
+  function drawResultCard(rankObj, sec, sc, comment) {
+    if (!resultCardCanvas) return null;
+
+    const c = resultCardCanvas;
+    const g = c.getContext("2d");
+    const CW = c.width;
+    const CH = c.height;
+
+    const bg = g.createLinearGradient(0, 0, 0, CH);
+    bg.addColorStop(0, "#0b1b3e");
+    bg.addColorStop(1, "#0a1226");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, CW, CH);
+
+    g.fillStyle = "rgba(79,121,255,.18)";
+    g.beginPath();
+    g.moveTo(-100, 0);
+    g.lineTo(CW * 0.55, 0);
+    g.lineTo(CW * 0.35, CH);
+    g.lineTo(-100, CH);
+    g.closePath();
+    g.fill();
+
+    g.fillStyle = "rgba(255,255,255,.92)";
+    g.font = "900 54px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText("わんグル お散歩ダッシュ地獄", 60, 110);
+
+    g.fillStyle = "rgba(255,255,255,.70)";
+    g.font = "800 26px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText("可愛い犬しか出てこないのに、異常に難しい。", 60, 155);
+
+    g.fillStyle = "#ffffff";
+    g.font = "900 120px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText(rankObj.rank, 60, 290);
+
+    g.fillStyle = "rgba(255,255,255,.86)";
+    g.font = "900 40px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText(rankObj.title, 60, 345);
+
+    g.fillStyle = "rgba(255,255,255,.92)";
+    g.font = "900 54px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText(`TIME ${sec.toFixed(1)}s`, 60, 430);
+    g.fillText(`SCORE ${sc}`, 60, 495);
+
+    g.fillStyle = "rgba(207,224,255,.92)";
+    g.font = "900 30px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText(comment, 60, 555);
+
+    g.fillStyle = "rgba(159,178,216,.95)";
+    g.font = "800 26px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText("#わんグル   #犬ゲー   #お散歩ダッシュ", 60, 605);
+
+    const imgX = CW - 360;
+    const imgY = 190;
+    const imgS = 270;
+
+    g.fillStyle = "rgba(255,255,255,.10)";
+    g.beginPath();
+    roundRectPath2(g, imgX - 18, imgY - 18, imgS + 36, imgS + 36, 36);
+    g.fill();
+
+    g.save();
+    g.beginPath();
+    g.arc(imgX + imgS / 2, imgY + imgS / 2, imgS / 2, 0, Math.PI * 2);
+    g.clip();
+
+    if (dogImgReady) {
+      g.drawImage(dogImg, imgX, imgY, imgS, imgS);
+    } else {
+      g.fillStyle = "rgba(255,255,255,.90)";
+      g.fillRect(imgX, imgY, imgS, imgS);
+      g.fillStyle = "#f4c9a5";
+      g.beginPath();
+      g.arc(imgX + imgS * 0.55, imgY + imgS * 0.58, imgS * 0.22, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "#111";
+      g.beginPath();
+      g.arc(imgX + imgS * 0.48, imgY + imgS * 0.55, 8, 0, Math.PI * 2);
+      g.arc(imgX + imgS * 0.62, imgY + imgS * 0.55, 8, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = "rgba(0,0,0,.45)";
+      g.lineWidth = 5;
+      g.beginPath();
+      g.arc(imgX + imgS * 0.55, imgY + imgS * 0.66, 18, 0.2, Math.PI - 0.2);
+      g.stroke();
+    }
+    g.restore();
+
+    g.strokeStyle = "rgba(255,255,255,.25)";
+    g.lineWidth = 10;
+    g.beginPath();
+    g.arc(imgX + imgS / 2, imgY + imgS / 2, imgS / 2 + 6, 0, Math.PI * 2);
+    g.stroke();
+
+    g.fillStyle = "rgba(255,255,255,.16)";
+    g.font = "900 24px system-ui, -apple-system, Segoe UI, sans-serif";
+    g.fillText("Powered by わんグル", CW - 340, 160);
+
+    try {
+      return c.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+
+    function roundRectPath2(g2, x, y, w, h, r) {
+      const rr = Math.min(r, w / 2, h / 2);
+      g2.moveTo(x + rr, y);
+      g2.arcTo(x + w, y, x + w, y + h, rr);
+      g2.arcTo(x + w, y + h, x, y + h, rr);
+      g2.arcTo(x, y + h, x, y, rr);
+      g2.arcTo(x, y, x + w, y, rr);
+      g2.closePath();
+    }
+  }
+
+  // ===== 終了処理 =====
+  function endGame() {
+    if (gameOver) return;
+    gameOver = true;
+    running = false;
+
+    const rankObj = calcRank(score, elapsed);
+    const comment = pickComment(rankObj.rank);
+
+    if (resultEl) {
+      resultEl.textContent = `SCORE ${score}（${rankObj.rank}：${rankObj.title}）`;
+    }
+
+    const shareText = buildShareText(rankObj, elapsed, score, comment);
+    if (shareTextEl) shareTextEl.value = shareText;
+
+    const url = drawResultCard(rankObj, elapsed, score, comment);
+    if (url && resultCardImg) resultCardImg.src = url;
+
+    updateHUD();
+  }
+
+  // ===== UI：コピー＆保存 =====
+  async function copyShare() {
+    if (!shareTextEl) return;
+    const text = shareTextEl.value || "";
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      const toast = document.getElementById("copyToast");
+      if (toast) {
+        toast.style.display = "block";
+        setTimeout(() => (toast.style.display = "none"), 1200);
+      }
+    } catch {
+      shareTextEl.focus();
+      shareTextEl.select();
+      document.execCommand("copy");
+    }
+  }
+
+  function saveCard() {
+    if (!resultCardImg || !resultCardImg.src) return;
+    const a = document.createElement("a");
+    a.href = resultCardImg.src;
+    a.download = "wanguru-dogdash-result.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // ===== 画像読み込み =====
+  function setDogImageFromFile(file) {
+    if (!file) return;
+    if (dogImgUrl) {
+      URL.revokeObjectURL(dogImgUrl);
+      dogImgUrl = "";
+    }
+    dogImgUrl = URL.createObjectURL(file);
+    dogImg = new Image();
+    dogImgReady = false;
+    dogImg.onload = () => { dogImgReady = true; };
+    dogImg.onerror = () => { dogImgReady = false; };
+    dogImg.src = dogImgUrl;
+  }
+
+  // ===== 開始/リトライ =====
+  function startGame() {
+    if (running) return;
+    if (gameOver) resetGameState();
+
+    running = true;
+    gameOver = false;
+    lastT = 0;
+
+    spawnTimer = 0.35;
+  }
+
+  // リトライ押下で即スタート
+  function retryGame() {
+    resetGameState();
+    startGame();
+  }
+
+  // ===== イベント =====
+  // ★ここが大事：Spaceでもクリックでも同じ doJump() を呼ぶ
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") e.preventDefault(); // ページスクロール抑止
+    keys.add(e.key);
+
+    if (e.code === "Space") doJump(); // ← Spaceでもジャンプ（2段OK）
+  }, { passive: false });
+
+  window.addEventListener("keyup", (e) => {
+    keys.delete(e.key);
+  });
+
+  canvas.addEventListener("pointerdown", (e) => {
+    pointerDown = true;
+    pointerX = e.clientX;
+    doJump();
+    canvas.setPointerCapture?.(e.pointerId);
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!pointerDown) return;
+    pointerX = e.clientX;
+  });
+
+  canvas.addEventListener("pointerup", () => { pointerDown = false; });
+  canvas.addEventListener("pointercancel", () => { pointerDown = false; });
+
+  dogFile?.addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) setDogImageFromFile(f);
+  });
+
+  startBtn?.addEventListener("click", startGame);
+  retryBtn?.addEventListener("click", retryGame);
+
+  btnCopyShare?.addEventListener("click", copyShare);
+  btnSaveCard?.addEventListener("click", saveCard);
+
+  // ===== メインループ =====
+  function updateAndRender(ts) {
+    if (!lastT) lastT = ts;
+    const dt = Math.min(0.033, (ts - lastT) / 1000);
+    lastT = ts;
+
+    if (running && !gameOver) update(dt);
+    render();
+
+    raf = requestAnimationFrame(updateAndRender);
+  }
+
+  // ===== 初期化＆開始 =====
+  resetGameState();
+  raf = requestAnimationFrame(updateAndRender);
+
+})();
