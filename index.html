@@ -14,6 +14,8 @@
       --muted:#9fb2d8;
       --accent:#4f79ff;
       --danger:#ff4d6d;
+      --ok:#36d399;
+      --warn:#fbbf24;
     }
     *{box-sizing:border-box}
     body{
@@ -85,9 +87,7 @@
       background: rgba(0,0,0,.25);
       border: 1px solid rgba(255,255,255,.08);
     }
-    input[type="file"]{
-      color: var(--muted);
-    }
+    input[type="file"]{ color: var(--muted); }
 
     .hud{
       display:flex;
@@ -96,6 +96,8 @@
       color: var(--muted);
       font-weight:700;
       font-variant-numeric: tabular-nums;
+      flex-wrap:wrap;
+      justify-content:flex-end;
     }
     .hud b{ color: var(--text); }
 
@@ -120,6 +122,10 @@
       border-bottom: 1px solid rgba(255,255,255,.08);
       color: var(--muted);
       font-weight: 700;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
     }
     .card .body{ padding: 14px; }
 
@@ -139,6 +145,7 @@
       font-size: 14px;
     }
     .tips b{ color: var(--text); }
+
     .resultBox{
       margin-top: 12px;
       padding: 12px;
@@ -210,6 +217,56 @@
       color: #cfe0ff;
       font-weight: 800;
     }
+
+    /* 追加情報（ステージ/デイリー/図鑑） */
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 12px;
+      letter-spacing:.01em;
+      white-space:nowrap;
+    }
+    .pill b{color:var(--text)}
+    .mini{
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.18);
+    }
+    .miniTitle{
+      font-weight: 900;
+      letter-spacing: .02em;
+      margin-bottom: 8px;
+    }
+    .miniRow{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .miniRow b{ color: var(--text); }
+    .badge{
+      display:inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 900;
+      font-size: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+    }
+    .badge.ok{ border-color: rgba(54,211,153,.35); background: rgba(54,211,153,.12); }
   </style>
 </head>
 
@@ -233,14 +290,19 @@
       </div>
 
       <div class="hud">
+        <span class="pill">STAGE <b id="stageName">公園</b></span>
+        <span class="pill">DAILY <b id="dailyStatus">未達</b></span>
         <div>SCORE <b id="score">0</b></div>
-        <div>TIME <b id="time">20.0</b></div>
+        <div>TIME <b id="time">0.0</b></div>
       </div>
     </div>
 
     <div class="grid">
       <div class="card">
-        <div class="head">ゲーム画面</div>
+        <div class="head">
+          <span>ゲーム画面</span>
+          <span class="pill">BEST <b id="bestScore">—</b></span>
+        </div>
         <div class="body">
           <canvas id="game" width="720" height="405"></canvas>
 
@@ -260,9 +322,24 @@
           <div class="tips">
             1. <b>犬の画像</b>を選ぶ（任意）<br>
             2. <b>スタート</b>を押す<br>
-            3. 20秒間、障害物を避けてスコアを稼ぐ🔥<br><br>
-            ・障害物を避けるほど <b>+10</b><br>
-            ・当たったら即終了（タイム0扱い）<br>
+            3. できるだけ長く走ってスコアを稼ぐ🔥<br><br>
+            ・障害物を避けるほど <b>加点</b><br>
+            ・当たったら即終了<br>
+            ・ニアミスはちょいボーナス🐾
+          </div>
+
+          <div class="mini">
+            <div class="miniTitle">🎯 今日のデイリー</div>
+            <div class="miniRow"><span id="dailyText">—</span><span id="dailyBadge" class="badge">—</span></div>
+            <div class="miniRow"><span>スタンプ</span><b id="stampCount">0</b></div>
+          </div>
+
+          <div class="mini">
+            <div class="miniTitle">📘 犬図鑑（遭遇）</div>
+            <div class="miniRow"><span>大型犬</span><span id="dex_big" class="badge">未</span></div>
+            <div class="miniRow"><span>凶暴チワワ</span><span id="dex_chi" class="badge">未</span></div>
+            <div class="miniRow"><span>変な犬</span><span id="dex_weird" class="badge">未</span></div>
+            <div class="miniRow"><span>フレンド犬</span><span id="dex_friend" class="badge">未</span></div>
           </div>
 
           <div class="resultBox">
@@ -294,7 +371,7 @@
   </div>
 
   <!-- 結果カード生成用（見えないキャンバス） -->
-  <canvas id="resultCardCanvas" width="1200" height="630" style="display:none;"></canvas>
+  <canvas id="resultCardCanvas" width="1200" height="675" style="display:none;"></canvas>
 
   <script src="main.js"></script>
 </body>
