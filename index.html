@@ -2,377 +2,267 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>うちの犬 お散歩ダッシュ（障害物よけ）</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>うちの犬 お散歩ダッシュ（ステージ制）</title>
   <style>
     :root{
-      --bg:#0b1220;
-      --panel:#0f1a2f;
-      --panel2:#0c1526;
-      --line:#243a64;
-      --text:#e6eefc;
-      --muted:#9fb2d8;
-      --accent:#4f79ff;
-      --danger:#ff4d6d;
-      --ok:#36d399;
-      --warn:#fbbf24;
+      --bg:#f6fbff;
+      --card:#ffffff;
+      --ink:#0b1220;
+      --muted:rgba(11,18,32,.62);
+      --line:rgba(11,18,32,.10);
+      --accent:#2bb673;
+      --accent2:#3b82f6;
     }
-    *{box-sizing:border-box}
     body{
       margin:0;
-      background: radial-gradient(1200px 800px at 30% 0%, #13254a 0%, var(--bg) 55%);
-      color:var(--text);
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      background:var(--bg);
+      color:var(--ink);
     }
     .wrap{
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 18px 14px 28px;
-    }
-    .title{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      font-weight:800;
-      letter-spacing:.02em;
-      margin: 6px 0 14px;
-    }
-    .title .emoji{font-size:22px}
-    .title small{color:var(--muted); font-weight:600}
-
-    .topbar{
-      display:flex;
-      flex-wrap:wrap;
-      gap:10px;
-      align-items:center;
-      justify-content:space-between;
-      padding: 12px 12px;
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 14px;
-      margin-bottom: 14px;
-    }
-
-    .controls{
-      display:flex;
-      flex-wrap:wrap;
-      gap:10px;
-      align-items:center;
-    }
-
-    .btn{
-      appearance:none;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-weight: 700;
-      cursor:pointer;
-      transition: transform .05s ease, background .15s ease;
-    }
-    .btn:hover{ background: rgba(255,255,255,.10); }
-    .btn:active{ transform: translateY(1px); }
-    .btn.primary{
-      background: linear-gradient(180deg, rgba(79,121,255,.95), rgba(79,121,255,.70));
-      border-color: rgba(79,121,255,.55);
-    }
-
-    .file{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding: 8px 10px;
-      border-radius: 12px;
-      background: rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-    input[type="file"]{ color: var(--muted); }
-
-    .hud{
-      display:flex;
-      gap:14px;
-      align-items:center;
-      color: var(--muted);
-      font-weight:700;
-      font-variant-numeric: tabular-nums;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-    }
-    .hud b{ color: var(--text); }
-
-    .grid{
+      max-width:1080px;
+      margin:18px auto 40px;
+      padding:0 14px;
       display:grid;
-      grid-template-columns: 1.4fr .9fr;
-      gap: 14px;
-      align-items:start;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap:14px;
     }
     @media (max-width: 980px){
-      .grid{ grid-template-columns: 1fr; }
+      .wrap{ grid-template-columns: 1fr; }
     }
-
     .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 16px;
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:16px;
+      box-shadow: 0 8px 20px rgba(0,0,0,.04);
       overflow:hidden;
     }
-    .card .head{
-      padding: 12px 14px;
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      color: var(--muted);
-      font-weight: 700;
+    .cardHeader{
+      padding:14px 16px;
+      border-bottom:1px solid var(--line);
       display:flex;
+      align-items:center;
       justify-content:space-between;
       gap:10px;
-      align-items:center;
+      flex-wrap:wrap;
     }
-    .card .body{ padding: 14px; }
-
+    .title{
+      font-size:16px;
+      font-weight:900;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .badge{
+      font-size:12px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      color:var(--muted);
+      background:#fff;
+      white-space:nowrap;
+    }
+    .panel{
+      padding:14px 16px 16px;
+    }
     canvas{
       width:100%;
       height:auto;
-      background: #0b1220;
-      border: 1px solid rgba(255,255,255,.10);
-      border-radius: 14px;
       display:block;
+      background:#0000;
+      border-radius:14px;
+      border:1px solid var(--line);
+      touch-action:none;
     }
-
-    .tips{
-      color: var(--muted);
-      line-height: 1.65;
-      font-weight: 650;
-      font-size: 14px;
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .row > *{ flex: 0 0 auto; }
+    .btn{
+      appearance:none;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      padding:10px 12px;
+      border-radius:12px;
+      font-weight:800;
+      cursor:pointer;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
     }
-    .tips b{ color: var(--text); }
-
-    .resultBox{
-      margin-top: 12px;
-      padding: 12px;
-      border-radius: 14px;
-      background: rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.08);
-      min-height: 52px;
-      color: var(--text);
-      font-weight: 800;
-      letter-spacing: .02em;
+    .btn.primary{
+      background:var(--accent);
+      border-color:transparent;
+      color:#fff;
     }
-    .note{
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px dashed rgba(255,255,255,.18);
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.6;
+    .btn.secondary{
+      background:var(--accent2);
+      border-color:transparent;
+      color:#fff;
     }
-    .kbd{
-      display:inline-block;
-      padding: 2px 8px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,.18);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      margin: 0 2px;
-    }
-
-    /* 拡散用UI */
-    .shareBox{
-      margin-top:12px;
-      padding: 12px;
-      border-radius: 14px;
-      background: rgba(0,0,0,.25);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-    .shareBoxTitle{
-      font-weight: 900;
-      margin-bottom: 8px;
-      letter-spacing: .02em;
-    }
-    #shareText{
-      width:100%;
-      resize:none;
-      padding:10px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,.15);
-      background: rgba(0,0,0,.25);
-      color: #e8eefc;
-      font-size: 13px;
-      line-height: 1.5;
-      outline: none;
-    }
-    .shareBtns{
-      display:flex;
+    .btn:disabled{ opacity:.45; cursor:not-allowed; }
+    input[type="file"]{ max-width:240px; }
+    .stats{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
       gap:10px;
-      margin-top:10px;
-      flex-wrap:wrap;
+      margin-top:12px;
     }
+    .stat{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px 12px;
+      background:#fff;
+    }
+    .stat .k{ font-size:12px; color:var(--muted); font-weight:800; }
+    .stat .v{ font-size:18px; font-weight:900; margin-top:2px; }
+    .muted{ color:var(--muted); }
+    .dex{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border:1px solid var(--line);
+      border-radius:14px;
+      margin-top:8px;
+    }
+    .dex th, .dex td{
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
+      font-size:13px;
+    }
+    .dex th{ text-align:left; background:rgba(11,18,32,.03); }
+    .dex tr:last-child td{ border-bottom:none; }
+    .todo{ color:rgba(11,18,32,.42); font-weight:900; }
+    .done{ color:var(--accent); font-weight:900; }
+    textarea{
+      width:100%;
+      min-height:140px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px 12px;
+      font-size:13px;
+      resize:vertical;
+    }
+    .imgWrap{
+      margin-top:10px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      overflow:hidden;
+      background:#fff;
+    }
+    .imgWrap img{ width:100%; display:block; }
     #copyToast{
       display:none;
-      margin-top:8px;
-      font-size:12px;
-      opacity:.9;
-      color: #cfe0ff;
-      font-weight: 800;
+      position:fixed;
+      left:50%;
+      bottom:20px;
+      transform:translateX(-50%);
+      background:rgba(0,0,0,.80);
+      color:#fff;
+      padding:10px 14px;
+      border-radius:999px;
+      font-weight:900;
+      z-index:9999;
     }
-
-    /* 追加情報（ステージ/デイリー/図鑑） */
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.18);
-      color: var(--muted);
-      font-weight: 800;
-      font-size: 12px;
-      letter-spacing:.01em;
-      white-space:nowrap;
-    }
-    .pill b{color:var(--text)}
-    .mini{
-      margin-top: 10px;
-      padding: 12px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.08);
-      background: rgba(0,0,0,.18);
-    }
-    .miniTitle{
-      font-weight: 900;
-      letter-spacing: .02em;
-      margin-bottom: 8px;
-    }
-    .miniRow{
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      color: var(--muted);
-      font-weight: 800;
-      font-size: 13px;
-      line-height: 1.7;
-    }
-    .miniRow b{ color: var(--text); }
-    .badge{
-      display:inline-block;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-weight: 900;
-      font-size: 12px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-    }
-    .badge.ok{ border-color: rgba(54,211,153,.35); background: rgba(54,211,153,.12); }
+    .small{ font-size:12px; color:var(--muted); }
   </style>
 </head>
-
 <body>
   <div class="wrap">
-    <div class="title">
-      <span class="emoji">🐶</span>
-      <div>
-        うちの犬 お散歩ダッシュ <small>（障害物よけ）</small>
-      </div>
-    </div>
 
-    <div class="topbar">
-      <div class="controls">
-        <div class="file">
-          <label for="dogFile" style="font-weight:800;">犬の画像</label>
-          <input id="dogFile" type="file" accept="image/*" />
-        </div>
-        <button id="startBtn" class="btn primary">スタート</button>
-        <button id="retryBtn" class="btn">リトライ</button>
-      </div>
-
-      <div class="hud">
-        <span class="pill">STAGE <b id="stageName">公園</b></span>
-        <span class="pill">DAILY <b id="dailyStatus">未達</b></span>
-        <div>SCORE <b id="score">0</b></div>
-        <div>TIME <b id="time">0.0</b></div>
-      </div>
-    </div>
-
-    <div class="grid">
-      <div class="card">
-        <div class="head">
-          <span>ゲーム画面</span>
-          <span class="pill">BEST <b id="bestScore">—</b></span>
-        </div>
-        <div class="body">
-          <canvas id="game" width="720" height="405"></canvas>
-
-          <div class="note">
-            操作：
-            <span class="kbd">クリック/タップ</span> or <span class="kbd">Space</span> でジャンプ /
-            <span class="kbd">←</span><span class="kbd">→</span> or <span class="kbd">A</span><span class="kbd">D</span> で左右移動
-            <br>
-            ※画像はこの端末内で表示するだけ（サーバー送信なし）
-          </div>
+    <!-- ===== Game ===== -->
+    <section class="card">
+      <div class="cardHeader">
+        <div class="title">🐾 うちの犬 お散歩ダッシュ <span class="badge">ステージ制 / 距離でクリア</span></div>
+        <div class="row">
+          <label class="btn" style="padding:8px 10px;">
+            犬画像を選ぶ
+            <input id="dogFile" type="file" accept="image/*" style="display:none;" />
+          </label>
+          <button id="startBtn" class="btn primary">▶ スタート</button>
+          <button id="retryBtn" class="btn">↻ リトライ</button>
+          <button id="nextBtn" class="btn secondary" style="display:none;">⏭ 次のステージ</button>
         </div>
       </div>
+      <div class="panel">
+        <canvas id="game" width="640" height="360"></canvas>
 
-      <div class="card">
-        <div class="head">使い方</div>
-        <div class="body">
-          <div class="tips">
-            1. <b>犬の画像</b>を選ぶ（任意）<br>
-            2. <b>スタート</b>を押す<br>
-            3. できるだけ長く走ってスコアを稼ぐ🔥<br><br>
-            ・障害物を避けるほど <b>加点</b><br>
-            ・当たったら即終了<br>
-            ・ニアミスはちょいボーナス🐾
+        <div class="stats">
+          <div class="stat">
+            <div class="k">SCORE</div>
+            <div class="v" id="score">0</div>
           </div>
-
-          <div class="mini">
-            <div class="miniTitle">🎯 今日のデイリー</div>
-            <div class="miniRow"><span id="dailyText">—</span><span id="dailyBadge" class="badge">—</span></div>
-            <div class="miniRow"><span>スタンプ</span><b id="stampCount">0</b></div>
+          <div class="stat">
+            <div class="k">TIME</div>
+            <div class="v"><span id="time">0.0</span>s</div>
           </div>
-
-          <div class="mini">
-            <div class="miniTitle">📘 犬図鑑（遭遇）</div>
-            <div class="miniRow"><span>大型犬</span><span id="dex_big" class="badge">未</span></div>
-            <div class="miniRow"><span>凶暴チワワ</span><span id="dex_chi" class="badge">未</span></div>
-            <div class="miniRow"><span>変な犬</span><span id="dex_weird" class="badge">未</span></div>
-            <div class="miniRow"><span>フレンド犬</span><span id="dex_friend" class="badge">未</span></div>
-          </div>
-
-          <div class="resultBox">
-            結果：<span id="result"></span>
-          </div>
-
-          <div class="shareBox">
-            <div class="shareBoxTitle">📣 シェア（拡散用）</div>
-
-            <textarea id="shareText" rows="4" readonly
-              placeholder="ゲーム終了後に投稿文が自動で出ます"></textarea>
-
-            <div class="shareBtns">
-              <button id="btnCopyShare" class="btn">投稿文をコピー</button>
-              <button id="btnSaveCard" class="btn primary">結果カードを保存</button>
-            </div>
-
-            <div id="copyToast">✅ コピーしました</div>
-          </div>
-
-          <div class="note">
-            もし動かない場合：<br>
-            ・VSCodeの拡張「Live Server」で開く（推奨）<br>
-            ・URLが <b>127.0.0.1:5500</b> みたいになってるか確認
+          <div class="stat">
+            <div class="k">BEST</div>
+            <div class="v" id="bestScore">—</div>
           </div>
         </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div class="badge"><b id="stageIdx">STAGE 1 / 3</b></div>
+          <div class="badge">エリア：<b id="stageName">公園</b></div>
+          <div class="badge">進行：<b id="progress">0%</b></div>
+          <div class="badge">デイリー：<b id="dailyBadge" class="todo">未達</b></div>
+          <div class="muted" id="dailyText" style="font-weight:800;">ニアミスを3回決めろ</div>
+        </div>
+
+        <div class="small" style="margin-top:10px;">
+          操作：←/→ or A/Dで移動 / クリック（タップ）・Spaceでジャンプ（2段）
+        </div>
       </div>
-    </div>
+    </section>
+
+    <!-- ===== Side ===== -->
+    <aside class="card">
+      <div class="cardHeader">
+        <div class="title">📚 犬図鑑（遭遇）</div>
+        <div class="badge">localStorage保存</div>
+      </div>
+      <div class="panel">
+        <table class="dex">
+          <thead>
+            <tr><th>カテゴリ</th><th>状態</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>デカ犬系</td><td id="dex_big" class="todo">未</td></tr>
+            <tr><td>チワワ系</td><td id="dex_chi" class="todo">未</td></tr>
+            <tr><td>変な犬系</td><td id="dex_weird" class="todo">未</td></tr>
+            <tr><td>友達犬（なでてOK）</td><td id="dex_friend" class="todo">未</td></tr>
+          </tbody>
+        </table>
+
+        <div style="height:12px;"></div>
+
+        <div class="title" style="font-size:14px;">🧾 結果 / シェア</div>
+        <div id="resultText" class="muted" style="font-weight:900; margin:6px 0 10px;"></div>
+
+        <textarea id="shareText" placeholder="ここに結果が入ります（コピーボタンでコピー）"></textarea>
+
+        <div class="row" style="margin-top:10px;">
+          <button id="copyBtn" class="btn">📋 コピー</button>
+          <button id="saveBtn" class="btn">🖼 画像保存</button>
+        </div>
+
+        <div class="imgWrap">
+          <img id="resultCardImg" alt="result card" />
+        </div>
+
+        <div class="small" style="margin-top:10px;">
+          ※ 画像保存はブラウザのダウンロードに保存されます。<br/>
+          ※ 進行状況（解放/クリア）は端末ごとに保存されます。
+        </div>
+      </div>
+    </aside>
+
   </div>
 
-  <!-- 結果カード生成用（見えないキャンバス） -->
-  <canvas id="resultCardCanvas" width="1200" height="675" style="display:none;"></canvas>
+  <div id="copyToast">コピーしました</div>
 
-  <script src="main.js"></script>
+  <script src="./main.js"></script>
 </body>
 </html>
