@@ -95,50 +95,29 @@
       gapMin: 170,
       bossAtRemainM: 150,
       // ✅ 1面ボス：巨大（2段ジャンプでギリギリ）
-      boss: { kind:"dog", behavior:"dog", sizeMul: 3.10, vxMul: 1.00, bobAmp: 0,  aura: 0.14 },
+      boss: { sizeMul: 3.10, vxMul: 1.00, bobAmp: 0,  aura: 0.14 },
     },
     {
       id: 2,
       name: "商店街",
       distanceM: 1000,
-      baseSpeed: 300,
-      densityMul: 1.06,
-      gapBase: 225,
-      gapMin: 135,
+      baseSpeed: 265,
+      densityMul: 0.92,
+      gapBase: 245,
+      gapMin: 150,
       bossAtRemainM: 150,
-      // ✅ 2面ボス：フェイント突進の“像”
-      //  - 一瞬減速 → 急加速
-      //  - 上下に大きく揺れる
-      boss: {
-        kind:"statue",
-        behavior:"feint",
-        sizeMul: 1.85,
-        vxMul: 1.05,
-        bobAmp: 26,
-        aura: 0.10,
-        // feint: 低速→加速 の1サイクル（秒）
-        feint: { slowSec: 0.28, dashSec: 0.24, slowMul: 0.55, dashMul: 1.75 },
-      },
+      boss: { sizeMul: 1.28, vxMul: 1.00, bobAmp: 18, aura: 0.17 },
     },
     {
       id: 3,
       name: "ドッグカフェ",
       distanceM: 1100,
-      baseSpeed: 370,
-      densityMul: 1.28,
-      gapBase: 205,
-      gapMin: 112,
+      baseSpeed: 285,
+      densityMul: 1.00,
+      gapBase: 235,
+      gapMin: 135,
       bossAtRemainM: 150,
-      // ✅ 3面ボス：巨大“ケルベロス”（3つ首）風（ラスボス）
-      boss: {
-        kind:"cerberus",
-        behavior:"final",
-        sizeMul: 1.70,
-        vxMul: 1.55,
-        bobAmp: 28,
-        aura: 0.28,
-        heads: 3,
-      },
+      boss: { sizeMul: 1.35, vxMul: 1.10, bobAmp: 22, aura: 0.22 },
     },
   ];
 
@@ -150,10 +129,6 @@
   let bossMode = false;      // true => new spawns are bosses only
   let bossTriggered = false; // 残り150m到達済み
   let bossInstantSpawned = false; // 到達時の即スポーン済み
-
-  // ✅ WARNING演出（ボス出現時に点滅表示）
-  let warningT = 0;
-  let warningDur = 0;
 
   // ✅ ボス出現を「画面内に確実に来る位置」で管理する
   let lastBossSpawnX = -9999;
@@ -268,13 +243,20 @@
 
   // ===== Input =====
   const keys = new Set();
+
+  // mouse (desktop): click to jump, hold near left/right to drift (existing behavior)
   let pointerDown = false;
   let pointerX = 0;
 
-  // Mobile tap move support
-  let touchMoveDir = 0;
-  let touchMoveTimer = 0;
-  const TAP_MOVE_TIME = 0.18; // seconds
+  // touch (mobile): swipe/drag to move left-right, tap to jump
+  let touchActive = false;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchX = 0;
+  let touchY = 0;
+  let touchDir = 0;      // -1 left, +1 right
+  let touchMoved = false;
+  let touchStartT = 0;
   function doJump() {
     if (!running || gameOver) return;
     if (player.jumpsLeft <= 0) return;
@@ -364,9 +346,6 @@
   function drawEnemyDog(g, o) {
     const p = o.palette;
     const x = o.x, y = o.y, w = o.w, h = o.h;
-    g.save();
-    g.globalAlpha = (o.alpha != null) ? g.globalAlpha * o.alpha : g.globalAlpha;
-
 
     // shadow
     const shadowY = groundY - 8;
@@ -521,243 +500,9 @@
       g.ellipse(tailBaseX + w*0.10, tailBaseY - h*0.04, w*0.12, h*0.08, -0.5, 0, Math.PI*2);
       g.fill();
     }
-    g.restore();
   }
 
-
-  // ===== Boss (statue) drawing =====
-  function drawStatueBoss(g, o) {
-    const x = o.x, y = o.y, w = o.w, h = o.h;
-    g.save();
-    g.globalAlpha = (o.alpha != null) ? g.globalAlpha * o.alpha : g.globalAlpha;
-
-    // shadow
-    const shadowY = groundY - 8;
-    g.globalAlpha *= 0.22;
-    g.fillStyle = "#000";
-    g.beginPath();
-    g.ellipse(x + w*0.50, shadowY, w*0.28, h*0.10, 0, 0, Math.PI*2);
-    g.fill();
-    g.globalAlpha = (o.alpha != null) ? o.alpha : 1;
-
-    // pedestal
-    g.fillStyle = "#6f7781";
-    roundRect(g, x + w*0.18, y + h*0.70, w*0.56, h*0.22, 12);
-    g.fill();
-
-    // body (stone)
-    g.fillStyle = "#a9b2bc";
-    roundRect(g, x + w*0.24, y + h*0.26, w*0.52, h*0.46, 18);
-    g.fill();
-
-    // head
-    g.fillStyle = "#b9c2cc";
-    g.beginPath();
-    g.ellipse(x + w*0.44, y + h*0.22, w*0.16, h*0.14, 0, 0, Math.PI*2);
-    g.fill();
-
-    // horns / ears
-    g.fillStyle = "#8e98a3";
-    g.beginPath();
-    g.moveTo(x + w*0.36, y + h*0.20);
-    g.lineTo(x + w*0.30, y + h*0.05);
-    g.lineTo(x + w*0.42, y + h*0.16);
-    g.closePath();
-    g.fill();
-    g.beginPath();
-    g.moveTo(x + w*0.52, y + h*0.20);
-    g.lineTo(x + w*0.58, y + h*0.05);
-    g.lineTo(x + w*0.46, y + h*0.16);
-    g.closePath();
-    g.fill();
-
-    // face (carved)
-    g.fillStyle = "rgba(0,0,0,.30)";
-    g.beginPath(); g.arc(x + w*0.40, y + h*0.22, w*0.02, 0, Math.PI*2); g.fill();
-    g.beginPath(); g.arc(x + w*0.48, y + h*0.22, w*0.02, 0, Math.PI*2); g.fill();
-    g.strokeStyle = "rgba(0,0,0,.28)";
-    g.lineWidth = Math.max(2, w*0.02);
-    g.lineCap = "round";
-    g.beginPath();
-    g.moveTo(x + w*0.40, y + h*0.28);
-    g.quadraticCurveTo(x + w*0.44, y + h*0.31, x + w*0.48, y + h*0.28);
-    g.stroke();
-
-    // aura (控えめ)
-    if (o.aura) {
-      g.save();
-      g.globalAlpha = o.aura * ((o.alpha != null) ? o.alpha : 1);
-      g.fillStyle = "#fff";
-      g.beginPath();
-      g.ellipse(x + w*0.50, y + h*0.45, w*0.70, h*0.75, 0, 0, Math.PI*2);
-      g.fill();
-      g.restore();
-    }
-
-    g.restore();
-  }
-
-  
-  // ===== Boss (cerberus) drawing =====
-  // 3つ首の巨大犬（ラスボス感）: 体は1つ、頭を3つにしてインパクトを出す
-  function drawCerberusBoss(g, o) {
-    const x = o.x, y = o.y, w = o.w, h = o.h;
-
-    g.save();
-    g.globalAlpha = (o.alpha != null) ? g.globalAlpha * o.alpha : g.globalAlpha;
-
-    // shadow
-    const shadowY = groundY - 8;
-    g.save();
-    g.globalAlpha *= 0.22;
-    g.fillStyle = "#000";
-    g.beginPath();
-    g.ellipse(x + w*0.50, shadowY, w*0.36, h*0.12, 0, 0, Math.PI*2);
-    g.fill();
-    g.restore();
-
-    // aura（少し強め）
-    if (o.aura) {
-      g.save();
-      g.globalAlpha = o.aura * ((o.alpha != null) ? o.alpha : 1);
-      g.fillStyle = "#fff";
-      g.beginPath();
-      g.ellipse(x + w*0.52, y + h*0.45, w*0.85, h*0.85, 0, 0, Math.PI*2);
-      g.fill();
-      g.restore();
-    }
-
-    // body
-    const bodyX = x + w*0.18;
-    const bodyY = y + h*0.48;
-    const bodyW = w*0.64;
-    const bodyH = h*0.34;
-
-    g.fillStyle = "#2b2b2b";
-    roundRect(g, bodyX, bodyY, bodyW, bodyH, 18);
-    g.fill();
-
-    // belly
-    g.fillStyle = "#3a3a3a";
-    roundRect(g, bodyX + bodyW*0.10, bodyY + bodyH*0.25, bodyW*0.55, bodyH*0.60, 16);
-    g.fill();
-
-    // legs
-    g.fillStyle = "#232323";
-    const legY = bodyY + bodyH - 2;
-    const legW = w*0.07;
-    const legH = h*0.22;
-    const legGap = bodyW*0.22;
-    const baseLX = bodyX + bodyW*0.10;
-    const phase = (o.anim || 0);
-    const legSwing = Math.sin(phase) * 2.6;
-    for (let i=0;i<4;i++){
-      const lx = baseLX + i*legGap;
-      const swing = (i%2===0 ? legSwing : -legSwing);
-      roundRect(g, lx, legY + (swing*0.12), legW, legH, 8);
-      g.fill();
-    }
-
-    // tail (flame-ish)
-    g.save();
-    g.globalAlpha *= 0.95;
-    g.fillStyle = "#ff7b2e";
-    g.beginPath();
-    g.ellipse(bodyX + bodyW*0.96, bodyY + bodyH*0.25, w*0.14, h*0.18, -0.7, 0, Math.PI*2);
-    g.fill();
-    g.fillStyle = "#ffd18a";
-    g.beginPath();
-    g.ellipse(bodyX + bodyW*0.98, bodyY + bodyH*0.22, w*0.07, h*0.10, -0.7, 0, Math.PI*2);
-    g.fill();
-    g.restore();
-
-    // heads (3つ)
-    const headR = w*0.16;
-    const headCY = y + h*0.34 + (o.bobAmp ? Math.sin((o.anim||0)*0.9)*o.bobAmp*0.15 : 0);
-
-    const centers = [
-      { cx: x + w*0.30, cy: headCY + 4 },
-      { cx: x + w*0.48, cy: headCY - 6 },
-      { cx: x + w*0.66, cy: headCY + 6 },
-    ];
-
-    const drawHead = (cx, cy, mood=0) => {
-      // head
-      g.fillStyle = "#2f2f2f";
-      g.beginPath();
-      g.ellipse(cx, cy, headR*1.05, headR, 0, 0, Math.PI*2);
-      g.fill();
-
-      // ears
-      g.fillStyle = "#1f1f1f";
-      g.beginPath();
-      g.moveTo(cx - headR*0.95, cy - headR*0.10);
-      g.lineTo(cx - headR*0.55, cy - headR*1.00);
-      g.lineTo(cx - headR*0.15, cy - headR*0.25);
-      g.closePath();
-      g.fill();
-      g.beginPath();
-      g.moveTo(cx + headR*0.15, cy - headR*0.10);
-      g.lineTo(cx + headR*0.55, cy - headR*0.95);
-      g.lineTo(cx + headR*0.95, cy - headR*0.28);
-      g.closePath();
-      g.fill();
-
-      // muzzle
-      g.fillStyle = "#3b3b3b";
-      g.beginPath();
-      g.ellipse(cx + headR*0.10, cy + headR*0.25, headR*0.70, headR*0.55, 0, 0, Math.PI*2);
-      g.fill();
-
-      // eyes (glow)
-      g.fillStyle = "#ff3b3b";
-      g.beginPath(); g.arc(cx - headR*0.25, cy - headR*0.10, headR*0.12, 0, Math.PI*2); g.fill();
-      g.beginPath(); g.arc(cx + headR*0.08, cy - headR*0.10, headR*0.12, 0, Math.PI*2); g.fill();
-
-      // nose
-      g.fillStyle = "#111";
-      g.beginPath(); g.arc(cx - headR*0.02, cy + headR*0.16, headR*0.12, 0, Math.PI*2); g.fill();
-
-      // mouth
-      g.strokeStyle = "#111";
-      g.lineWidth = Math.max(2, headR*0.18);
-      g.lineCap = "round";
-      g.beginPath();
-      g.moveTo(cx - headR*0.18, cy + headR*0.34);
-      g.quadraticCurveTo(cx - headR*0.02, cy + headR*(0.48 + mood*0.06), cx + headR*0.14, cy + headR*0.34);
-      g.stroke();
-    };
-
-    // 首（3本）
-    g.save();
-    g.fillStyle = "#2b2b2b";
-    for (const c of centers) {
-      roundRect(g, c.cx - headR*0.34, c.cy + headR*0.50, headR*0.68, headR*1.10, 14);
-      g.fill();
-    }
-    g.restore();
-
-    drawHead(centers[0].cx, centers[0].cy, 0);
-    drawHead(centers[1].cx, centers[1].cy, 1);
-    drawHead(centers[2].cx, centers[2].cy, 0);
-
-    // little flames around (impact)
-    g.save();
-    g.globalAlpha *= 0.55;
-    g.fillStyle = "#ffb86b";
-    for (let i=0;i<7;i++){
-      const fx = x + w*(0.22 + i*0.10) + Math.sin((o.anim||0)*1.2 + i)*6;
-      const fy = y + h*(0.22 + (i%3)*0.10) + Math.cos((o.anim||0)*1.4 + i)*4;
-      g.beginPath();
-      g.ellipse(fx, fy, w*0.03, h*0.05, 0, 0, Math.PI*2);
-      g.fill();
-    }
-    g.restore();
-
-    g.restore();
-  }
-
-// ===== Spawning =====
+  // ===== Spawning =====
   function currentSpeed() {
     const t = elapsed;
     const ramp = 1 + Math.min(t, 35) / 35 * 0.35; // 1.0 -> 1.35
@@ -839,14 +584,6 @@
       bobAmp: extra.bobAmp || 0,
       aura: extra.aura || 0,
       isBoss: !!extra.isBoss,
-      behavior: extra.behavior || null,
-      isIllusion: !!extra.isIllusion,
-      alpha: (extra.alpha != null) ? extra.alpha : 1,
-      renderKind: extra.renderKind || "dog",
-      // フェイント用
-      feintT: 0,
-      baseVx: sp,
-      feintCfg: extra.feint || null,
     });
 
     setDex(dtp.kind);
@@ -857,73 +594,14 @@
 
   function spawnBoss(xOverride = null) {
     const boss = stage.boss;
-
-    // ========= 2面：像（フェイント突進） =========
-    if (boss.kind === "statue") {
-      const statueType = { id:"statue", kind:"weird", palette:{ body:"#bfc6cf", ear:"#9aa3ad", accent:"#d6dde6" }, ear:"tri", tail:"stub", face:"smile" };
-      spawnEnemyDog(statueType, {
-        isBoss: true,
-        sizeMul: boss.sizeMul,
-        vxMul: boss.vxMul,
-        bobAmp: boss.bobAmp,
-        aura: boss.aura,
-        behavior: "feint",
-        feint: boss.feint,
-        renderKind: "statue",
-      }, xOverride);
-      return;
-    }
-
-
-    // ========= 3面：ケルベロス（3つ首） =========
-    if (boss.kind === "cerberus") {
-      const cerbType = { id:"cerberus", kind:"weird", palette:{ body:"#2b2b2b", ear:"#1f1f1f", accent:"#ff7b2e" }, ear:"tri", tail:"flame", face:"smile" };
-      spawnEnemyDog(cerbType, {
-        isBoss: true,
-        sizeMul: boss.sizeMul,
-        vxMul: boss.vxMul,
-        bobAmp: boss.bobAmp,
-        aura: boss.aura,
-        behavior: "final",
-        renderKind: "cerberus",
-        heads: boss.heads || 3,
-      }, xOverride);
-      return;
-    }
-
-    // ========= 1面/3面：犬 =========
     const baseType = pickDogType(elapsed);
-
-    // 3面は “幻影” を2体追加（当たり判定なし）
-    const isFinal = (boss.behavior === "final") && (boss.illusions || 0) > 0;
-
     spawnEnemyDog(baseType, {
       isBoss: true,
       sizeMul: boss.sizeMul,
       vxMul: boss.vxMul,
       bobAmp: boss.bobAmp,
       aura: boss.aura,
-      behavior: boss.behavior || "dog",
-      renderKind: "dog",
     }, xOverride);
-
-    if (isFinal) {
-      const baseX = (xOverride != null) ? xOverride : lastBossSpawnX;
-      const offs = [-42, -18]; // 少しずらして “幻影感”
-      for (let i = 0; i < Math.min(2, boss.illusions); i++) {
-        spawnEnemyDog(baseType, {
-          isBoss: false,
-          isIllusion: true,
-          alpha: 0.35,
-          sizeMul: boss.sizeMul * 0.98,
-          vxMul: boss.vxMul * 1.02,
-          bobAmp: boss.bobAmp * 1.25,
-          aura: 0,
-          behavior: "illusion",
-          renderKind: "dog",
-        }, baseX + 24 + i*18);
-      }
-    }
   }
 
   // ✅ ボスが「絶対に画面に来る」強制スポーン位置
@@ -941,10 +619,6 @@
     if (remain <= stage.bossAtRemainM) {
       bossTriggered = true;
       bossMode = true;
-
-      // ✅ WARNING点滅（約1〜1.5秒）
-      warningDur = rand(1.0, 1.5);
-      warningT = warningDur;
 
       // 既存敵は消さない
       // 遅延スポーンだけ止める
@@ -1033,19 +707,25 @@
   function updatePlayer(dt) {
     let ax = 0;
     if (keys.has("ArrowLeft") || keys.has("a") || keys.has("A")) ax -= 1;
-    if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) ax += 1;
-
+    if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) ax += 1;    // desktop pointer drift (mouse / pen)
     if (pointerDown) {
-      const rect = canvas.getBoundingClientRect();
-      const px = pointerX - rect.left;
-      if (px < W * 0.45) ax -= 0.55;
-      if (px > W * 0.55) ax += 0.55;
-    }
-    // quick tap nudge (mobile)
-    if (touchMoveTimer > 0) {
-      ax += touchMoveDir * 0.55;
+      const px = pointerX - canvas.getBoundingClientRect().left;
+      if (px < W * 0.45) ax -= 0.35;
+      if (px > W * 0.55) ax += 0.35;
     }
 
+    // mobile swipe/drag: move in swipe direction while touching
+    if (touchActive) {
+      // if user has dragged enough, start moving to that side
+      if (touchMoved && touchDir !== 0) {
+        ax += touchDir * 0.90;
+      } else {
+        // small nudge based on current finger position (helps "tap left/right" too)
+        const tx = touchX - canvas.getBoundingClientRect().left;
+        if (tx < W * 0.45) ax -= 0.20;
+        if (tx > W * 0.55) ax += 0.20;
+      }
+    }
     player.vx = ax * 320;
     player.x += player.vx * dt;
     player.x = clamp(player.x, 20, W - player.w - 20);
@@ -1068,7 +748,6 @@
   }
 
   function collide(pl, o) {
-    if (o && o.isIllusion) return false;
     const px = pl.x + 6, py = pl.y + 6, pw = pl.w - 12, ph = pl.h - 12;
 
     let ox = o.x, oy = o.y, ow = o.w, oh = o.h;
@@ -1091,27 +770,6 @@
 
     for (let i = obstacles.length - 1; i >= 0; i--) {
       const o = obstacles[i];
-
-      // ---- movement ----
-      // フェイント突進（2面ボス）
-      if (o.behavior === "feint" && o.feintCfg) {
-        const cfg = o.feintCfg;
-        o.feintT = (o.feintT || 0) + dt;
-        const cycle = cfg.slowSec + cfg.dashSec;
-        const t = (o.feintT % cycle);
-
-        // slow -> dash
-        let mul = cfg.slowMul;
-        if (t > cfg.slowSec) {
-          const k = (t - cfg.slowSec) / cfg.dashSec; // 0..1
-          // dashMul へ一気に上げる（“急加速”）
-          mul = cfg.slowMul + (cfg.dashMul - cfg.slowMul) * (k*k);
-        }
-        o.vx = o.baseVx * mul;
-      } else if (o.isBoss && stage.boss && stage.boss.behavior === "final") {
-        // 3面ボス（速め安定）
-        o.vx = o.baseVx;
-      }
 
       o.x -= o.vx * dt;
       if (o.anim != null) o.anim += dt * 10;
@@ -1177,8 +835,7 @@
   }
 
   // ===== Background =====
-  // ステージごとに背景を切り替え（1:公園 / 2:商店街 / 3:ドッグカフェ）
-  function makeBgPark() {
+  const bgCache = (() => {
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const g = c.getContext("2d");
@@ -1189,7 +846,6 @@
     g.fillStyle = grad;
     g.fillRect(0,0,W,H);
 
-    // 遠景の丘
     g.fillStyle = "#bfe6d8";
     g.beginPath();
     g.moveTo(0, groundY-48);
@@ -1217,381 +873,14 @@
 
     g.fillStyle = "#2bb673";
     g.fillRect(0, groundY, W, H-groundY);
-    g.fillStyle = "rgba(0,0,0,08)";
+    g.fillStyle = "rgba(0,0,0,.08)";
     g.fillRect(0, groundY, W, 12);
 
     return c;
-  }
-
-  function makeBgTown() {
-    const c = document.createElement("canvas");
-    c.width = W; c.height = H;
-    const g = c.getContext("2d");
-
-    // ===== 夕焼けの空（商店街） =====
-    const sky = g.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0.00, "#f6c34a");
-    sky.addColorStop(0.45, "#f0a53b");
-    sky.addColorStop(1.00, "#ffd9a6");
-    g.fillStyle = sky;
-    g.fillRect(0, 0, W, H);
-
-    // 雲（ふわっと）
-    const cloud = (x, y, s) => {
-      g.save();
-      g.globalAlpha = 0.55;
-      g.fillStyle = "#fff2c8";
-      g.beginPath();
-      g.ellipse(x, y, 90*s, 28*s, 0, 0, Math.PI*2);
-      g.ellipse(x+70*s, y+5*s, 70*s, 22*s, 0, 0, Math.PI*2);
-      g.ellipse(x-60*s, y+8*s, 72*s, 24*s, 0, 0, Math.PI*2);
-      g.fill();
-      g.restore();
-    };
-    cloud(120, 70, 1.0);
-    cloud(520, 55, 0.9);
-    cloud(360, 105, 0.75);
-
-    // 太陽（地平線）
-    g.save();
-    g.globalAlpha = 0.75;
-    g.fillStyle = "#fff6cf";
-    g.beginPath();
-    g.arc(W*0.72, groundY-150, 110, 0, Math.PI*2);
-    g.fill();
-    g.restore();
-
-    // 遠景シルエット（街）
-    const skyline = (x, w, h, a) => {
-      g.fillStyle = `rgba(90,70,60,${a})`;
-      g.fillRect(x, groundY-h-70, w, h);
-    };
-    skyline(0,   150, 160, 0.22);
-    skyline(130, 220, 210, 0.20);
-    skyline(320, 180, 150, 0.18);
-    skyline(470, 170, 190, 0.20);
-    skyline(610, 120, 140, 0.18);
-
-    // 高架＆電車（シンプルに、パクリにならない形）
-    g.fillStyle = "rgba(60,60,65,0.55)";
-    g.fillRect(0, groundY-220, W, 20);
-    g.fillRect(0, groundY-200, W, 6);
-
-    // 電車ボディ
-    g.save();
-    g.translate(0, 0);
-    g.fillStyle = "rgba(245,245,248,0.85)";
-    roundRect(g, 70, groundY-214, W-160, 18, 10);
-    g.fill();
-    // 窓
-    g.fillStyle = "rgba(80,120,160,0.55)";
-    for (let x = 92; x < W-120; x += 22) g.fillRect(x, groundY-210, 14, 8);
-    // ライン
-    g.fillStyle = "rgba(40,80,120,0.45)";
-    g.fillRect(70, groundY-206, W-160, 2);
-    g.restore();
-
-    // ===== 手前の店並び =====
-    const shop = (x, w, h, bodyCol, roofCol) => {
-      g.fillStyle = bodyCol;
-      g.fillRect(x, groundY-h, w, h);
-
-      g.fillStyle = roofCol;
-      g.fillRect(x, groundY-h, w, 10);
-
-      // 窓
-      g.fillStyle = "rgba(180,220,250,0.55)";
-      g.fillRect(x+10, groundY-h+18, w-20, 40);
-
-      // 影
-      g.fillStyle = "rgba(0,0,0,0.10)";
-      g.fillRect(x, groundY-h, w, 6);
-    };
-
-    shop(30,  190, 160, "#f2c96c", "#d35b44");
-    shop(235, 190, 175, "#efe7da", "#6d7a7f");
-    shop(440, 200, 150, "#bfe6c4", "#3a6b54");
-
-    // 店の看板（日本語、各店名はオリジナル）
-    const board = (x, y, w, h, col, txt) => {
-      g.save();
-      g.fillStyle = col;
-      roundRect(g, x, y, w, h, 10);
-      g.fill();
-      g.fillStyle = "rgba(0,0,0,0.40)";
-      g.font = "900 16px system-ui, -apple-system, Segoe UI, sans-serif";
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(txt, x+w/2, y+h/2);
-      g.restore();
-    };
-    board(60,  groundY-150, 110, 34, "rgba(255,255,255,0.75)", "らーめん");
-    board(260, groundY-162, 120, 34, "rgba(255,255,255,0.72)", "食品の店");
-    board(475, groundY-140, 140, 34, "rgba(255,255,255,0.72)", "野菜の市");
-
-    // 「わんグル」サイン（背景に残す）
-    g.save();
-    g.fillStyle = "rgba(35,150,120,0.82)";
-    roundRect(g, 360, groundY-120, 140, 32, 10);
-    g.fill();
-    g.fillStyle = "rgba(255,255,255,0.95)";
-    g.font = "900 18px system-ui, -apple-system, Segoe UI, sans-serif";
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText("わんグル", 430, groundY-104);
-    g.restore();
-
-    // 街路樹
-    g.save();
-    g.fillStyle = "#6b4a2f";
-    g.fillRect(330, groundY-70, 14, 70);
-    g.fillStyle = "#4b8c4b";
-    g.beginPath();
-    g.arc(337, groundY-85, 34, 0, Math.PI*2);
-    g.arc(310, groundY-70, 28, 0, Math.PI*2);
-    g.arc(362, groundY-68, 26, 0, Math.PI*2);
-    g.fill();
-    g.restore();
-
-    // 道（横断歩道っぽく）
-    g.fillStyle = "rgba(35,35,40,0.88)";
-    g.fillRect(0, groundY, W, H-groundY);
-
-    g.fillStyle = "rgba(255,255,255,0.35)";
-    for (let x = 20; x < W; x += 64) {
-      g.fillRect(x, groundY + 26, 38, 7);
-    }
-
-    g.fillStyle = "rgba(255,255,255,0.22)";
-    for (let x = 0; x < W; x += 90) {
-      g.fillRect(x+10, groundY + 52, 50, 7);
-    }
-
-    // 影
-    g.fillStyle = "rgba(0,0,0,0.10)";
-    g.fillRect(0, groundY, W, 12);
-
-    return c;
-  }
-
-  function makeBgCafe() {
-    const c = document.createElement("canvas");
-    c.width = W; c.height = H;
-    const g = c.getContext("2d");
-
-    // ===== 広い公園・運動場（写真っぽい雰囲気を“描画”で） =====
-    const sky = g.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0.00, "#76b7ff");
-    sky.addColorStop(0.60, "#cfe8ff");
-    sky.addColorStop(1.00, "#f8fbff");
-    g.fillStyle = sky;
-    g.fillRect(0, 0, W, H);
-
-    // 雲
-    const puff = (x, y, s) => {
-      g.save();
-      g.globalAlpha = 0.85;
-      g.fillStyle = "rgba(255,255,255,0.95)";
-      g.beginPath();
-      g.ellipse(x, y, 70*s, 22*s, 0, 0, Math.PI*2);
-      g.ellipse(x+60*s, y+4*s, 55*s, 18*s, 0, 0, Math.PI*2);
-      g.ellipse(x-55*s, y+6*s, 52*s, 18*s, 0, 0, Math.PI*2);
-      g.fill();
-      g.restore();
-    };
-    puff(150, 70, 1.0);
-    puff(520, 78, 0.95);
-    puff(360, 120, 0.7);
-
-    // 遠くの山
-    g.save();
-    g.fillStyle = "rgba(40,90,60,0.55)";
-    g.beginPath();
-    g.moveTo(0,   groundY-110);
-    g.quadraticCurveTo(140, groundY-180, 280, groundY-130);
-    g.quadraticCurveTo(410, groundY-210, 560, groundY-140);
-    g.quadraticCurveTo(650, groundY-190, W,   groundY-120);
-    g.lineTo(W, groundY);
-    g.lineTo(0, groundY);
-    g.closePath();
-    g.fill();
-
-    g.fillStyle = "rgba(20,70,45,0.55)";
-    g.beginPath();
-    g.moveTo(0,   groundY-90);
-    g.quadraticCurveTo(160, groundY-150, 310, groundY-105);
-    g.quadraticCurveTo(450, groundY-160, 620, groundY-110);
-    g.quadraticCurveTo(700, groundY-140, W,   groundY-95);
-    g.lineTo(W, groundY);
-    g.lineTo(0, groundY);
-    g.closePath();
-    g.fill();
-    g.restore();
-
-    // 手前の芝生
-    const grass = g.createLinearGradient(0, groundY-40, 0, H);
-    grass.addColorStop(0.00, "#86c85a");
-    grass.addColorStop(0.55, "#6fba4b");
-    grass.addColorStop(1.00, "#5aa13e");
-    g.fillStyle = grass;
-    g.fillRect(0, groundY-20, W, H-(groundY-20));
-
-    // 芝のムラ
-    g.save();
-    g.globalAlpha = 0.12;
-    g.fillStyle = "#2b5a28";
-    for (let i = 0; i < 220; i++) {
-      const x = (i*37) % W;
-      const y = groundY-10 + ((i*53) % 140);
-      g.fillRect(x, y, 10 + (i%12), 2 + (i%3));
-    }
-    g.restore();
-
-    // 遊具（アジリティ風の障害物）
-    const rail = (x, y, w, h, col) => {
-      g.fillStyle = col;
-      roundRect(g, x, y, w, h, 8);
-      g.fill();
-      g.fillStyle = "rgba(0,0,0,0.12)";
-      g.fillRect(x, y, w, 6);
-    };
-
-    rail(90,  groundY-54, 140, 12, "rgba(255,180,70,0.9)");
-    rail(140, groundY-82, 18,  80, "rgba(255,180,70,0.9)");
-    rail(210, groundY-82, 18,  80, "rgba(255,180,70,0.9)");
-
-    rail(360, groundY-44, 160, 12, "rgba(80,160,255,0.9)");
-    rail(400, groundY-78, 18,  70, "rgba(80,160,255,0.9)");
-    rail(490, groundY-78, 18,  70, "rgba(80,160,255,0.9)");
-
-    // フェンス（奥）
-    g.save();
-    g.globalAlpha = 0.35;
-    g.strokeStyle = "rgba(255,255,255,0.8)";
-    g.lineWidth = 2;
-    const fenceY = groundY-55;
-    g.beginPath();
-    g.moveTo(0, fenceY);
-    g.lineTo(W, fenceY);
-    g.stroke();
-    for (let x = 0; x < W; x += 22) {
-      g.beginPath();
-      g.moveTo(x, fenceY);
-      g.lineTo(x, fenceY+22);
-      g.stroke();
-    }
-    g.restore();
-
-    // 「わんグル」看板（右上寄り）
-    g.save();
-    g.fillStyle = "rgba(255,255,255,0.78)";
-    roundRect(g, W-190, 44, 160, 40, 12);
-    g.fill();
-    g.fillStyle = "rgba(30,90,60,0.85)";
-    g.font = "900 18px system-ui, -apple-system, Segoe UI, sans-serif";
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText("わんグル", W-110, 64);
-    g.restore();
-
-    // 地面の影
-    g.fillStyle = "rgba(0,0,0,0.10)";
-    g.fillRect(0, groundY, W, 12);
-
-    return c;
-  }
-
-  
-  // ===== 背景画像（2面・3面：指定画像を使用） =====
-  // ※ GitHub Pages上で参照できる相対パスに置いてください（例: ./assets/bg_stage2.jpg）
-  const BG2_FILE = "./bg_stage2.jpg";
-  const BG3_FILE = "./bg_stage3.jpg";
-  const bgImg2 = new Image();
-  const bgImg3 = new Image();
-
-  // Stage background images (external files in the same folder as index.html)
-  // Put these files next to index.html:
-  //   ./bg_stage2.jpg
-  //   ./bg_stage3.jpg
-  // If they fail to load, the game falls back to the simple built-in background.
-  //
-  // NOTE: encodeURI helps if the path has non-ASCII chars (not needed for these names but harmless).
-  bgImg2.src = encodeURI(BG2_FILE);
-  bgImg3.src = encodeURI(BG3_FILE);
-
-  let bg2Loaded = false;
-  let bg3Loaded = false;
-  let bg2Error = false;
-  let bg3Error = false;
-
-  bgImg2.onload = () => { bg2Loaded = true; };
-  bgImg3.onload = () => { bg3Loaded = true; };
-  bgImg2.onerror = () => { bg2Error = true; };
-  bgImg3.onerror = () => { bg3Error = true; };
-function drawImageCover(g, img) {
-    const iw = img.naturalWidth || img.width;
-    const ih = img.naturalHeight || img.height;
-    if (!iw || !ih) return false;
-
-    const scale = Math.max(W / iw, H / ih);
-    const dw = iw * scale;
-    const dh = ih * scale;
-    const dx = (W - dw) / 2;
-    const dy = (H - dh) / 2;
-    g.drawImage(img, dx, dy, dw, dh);
-    return true;
-  }
-
-  function drawWanguruTag(g) {
-    // 右上に「わんグル」ロゴ風（軽い帯＋文字）を常に重ねる
-    g.save();
-    g.globalAlpha = 0.92;
-    g.fillStyle = "rgba(0,0,0,0.35)";
-    g.fillRect(W-220, 22, 190, 56);
-    g.globalAlpha = 1;
-    g.fillStyle = "#fff";
-    g.font = "bold 28px sans-serif";
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText("わんグル", W-125, 50);
-    g.restore();
-  }
-
-  const bgCache = {
-    1: makeBgPark(),
-    2: makeBgTown(),
-    3: makeBgCafe(),
-  };
+  })();
 
   function drawBackground() {
-    // 1面は従来の描画（公園）
-    if (stage.id === 1) {
-      ctx.drawImage(bgCache[1], 0, 0);
-      return;
-    }
-
-    // 2面・3面は指定画像を優先（未読み込みなら従来の簡易背景にフォールバック）
-    if (stage.id === 2) {
-      if (bgImg2.complete && bgImg2.naturalWidth) {
-        drawImageCover(ctx, bgImg2);
-        drawWanguruTag(ctx);
-        return;
-      }
-      ctx.drawImage(bgCache[2], 0, 0);
-      return;
-    }
-
-    if (stage.id === 3) {
-      if (bgImg3.complete && bgImg3.naturalWidth) {
-        drawImageCover(ctx, bgImg3);
-        drawWanguruTag(ctx);
-        return;
-      }
-      ctx.drawImage(bgCache[3], 0, 0);
-      return;
-    }
-
-    ctx.drawImage(bgCache[1], 0, 0);
+    ctx.drawImage(bgCache, 0, 0);
   }
 
   function drawPlayer() {
@@ -1635,9 +924,7 @@ function drawImageCover(g, img) {
         ctx.fill();
         ctx.restore();
       } else {
-        if (o.renderKind === "statue") drawStatueBoss(ctx, o);
-        else if (o.renderKind === "cerberus") drawCerberusBoss(ctx, o);
-        else drawEnemyDog(ctx, o);
+        drawEnemyDog(ctx, o);
       }
     }
   }
@@ -1691,10 +978,6 @@ function drawImageCover(g, img) {
 
     elapsed += dt;
 
-    if (warningT > 0) warningT -= dt;
-
-
-    if (touchMoveTimer > 0) touchMoveTimer = Math.max(0, touchMoveTimer - dt);
     updateSpawnQueue(dt);
     updateSpawns(dt);
     updatePlayer(dt);
@@ -1725,21 +1008,6 @@ function drawImageCover(g, img) {
     ctx.fillStyle = "rgba(0,0,0,.30)";
     ctx.font = "900 13px system-ui, -apple-system, Segoe UI, sans-serif";
     ctx.fillText(`STAGE ${stage.id} / ${STAGES.length}　残り ${remain}m`, 14, 96);
-
-    // ✅ WARNING（ボス出現時：1〜1.5秒点滅）
-    if (warningT > 0) {
-      const k = warningT / Math.max(0.001, warningDur);
-      const blink = ((elapsed * 12) % 2) < 1 ? 1 : 0.25;
-      ctx.save();
-      ctx.globalAlpha = 0.85 * blink * (0.65 + 0.35 * (1 - k));
-      ctx.fillStyle = "rgba(0,0,0,.55)";
-      ctx.font = "900 22px system-ui, -apple-system, Segoe UI, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("⚠ WARNING! ⚠", W * 0.50 + 2, 44 + 2);
-      ctx.fillStyle = "#fff";
-      ctx.fillText("⚠ WARNING! ⚠", W * 0.50, 44);
-      ctx.restore();
-    }
 
     if (bossMode) {
       ctx.fillStyle = "rgba(0,0,0,.35)";
@@ -1899,10 +1167,6 @@ SCORE：${score}
 
   function startGame() {
     if (running) return;
-
-    // ✅ クリア後も「スタート」で次へ進める（=リトライと同じ挙動）
-    if (gameOver) { retryGame(); return; }
-
     updateDailyUI(true);
     running = true;
     gameOver = false;
@@ -1937,41 +1201,91 @@ SCORE：${score}
   window.addEventListener("keyup", (e) => { keys.delete(e.key); });
 
   canvas.addEventListener("pointerdown", (e) => {
-    // prevent page scroll / pinch on mobile
-    e.preventDefault?.();
-    pointerDown = true;
-    pointerX = e.clientX;
+    // prevent page scroll / gesture on touch
+    if (e.pointerType === "touch") e.preventDefault();
 
-    const rect = canvas.getBoundingClientRect();
-    const lx = e.clientX - rect.left;
-    const ly = e.clientY - rect.top;
-
-    // tap-move: bottom area = move, top area = jump
-    if (ly < H * 0.62) {
+    // Desktop (mouse): keep the snappy "click = jump" feel
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      pointerDown = true;
+      pointerX = e.clientX;
       doJump();
-    } else {
-      if (lx < W * 0.45) { touchMoveDir = -1; touchMoveTimer = TAP_MOVE_TIME; }
-      else if (lx > W * 0.55) { touchMoveDir = 1; touchMoveTimer = TAP_MOVE_TIME; }
-      else { touchMoveDir = 0; }
+      canvas.setPointerCapture?.(e.pointerId);
+      return;
     }
 
+    // Mobile (touch): swipe/drag to move, tap to jump (handled on pointerup)
+    touchActive = true;
+    touchMoved = false;
+    touchDir = 0;
+    touchStartX = touchX = e.clientX;
+    touchStartY = touchY = e.clientY;
+    touchStartT = performance.now();
     canvas.setPointerCapture?.(e.pointerId);
   }, { passive: false });
 
   canvas.addEventListener("pointermove", (e) => {
-    e.preventDefault?.();
-    if (!pointerDown) return;
-    pointerX = e.clientX;
+    if (e.pointerType === "touch") e.preventDefault();
+
+    // desktop drift
+    if (pointerDown && (e.pointerType === "mouse" || e.pointerType === "pen")) {
+      pointerX = e.clientX;
+      return;
+    }
+
+    // touch swipe/drag
+    if (!touchActive) return;
+    touchX = e.clientX;
+    touchY = e.clientY;
+
+    const dx = touchX - touchStartX;
+    const dy = touchY - touchStartY;
+
+    // treat mostly-horizontal movement as swipe
+    const SWIPE_PX = 18; // threshold
+    if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy) * 0.6) {
+      touchMoved = true;
+      touchDir = dx > 0 ? 1 : -1;
+    }
   }, { passive: false });
 
   canvas.addEventListener("pointerup", (e) => {
-    e.preventDefault?.();
-    pointerDown = false;
+    if (e.pointerType === "touch") e.preventDefault();
+
+    // desktop end
+    if (e.pointerType === "mouse" || e.pointerType === "pen") {
+      pointerDown = false;
+      try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
+      return;
+    }
+
+    // touch end: tap => jump, swipe => just stop moving
+    if (touchActive) {
+      const t = performance.now() - touchStartT;
+      const dx = touchX - touchStartX;
+      const dy = touchY - touchStartY;
+
+      const TAP_PX = 14;
+      const TAP_MS = 260;
+
+      // "tap" means small movement and short time
+      const isTap = (Math.abs(dx) < TAP_PX && Math.abs(dy) < TAP_PX && t < TAP_MS);
+
+      touchActive = false;
+      touchMoved = false;
+      touchDir = 0;
+
+      if (isTap) doJump();
+    }
+
     try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
   }, { passive: false });
 
   canvas.addEventListener("pointercancel", (e) => {
+    if (e.pointerType === "touch") e.preventDefault();
     pointerDown = false;
+    touchActive = false;
+    touchMoved = false;
+    touchDir = 0;
     try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
   }, { passive: false });
 
