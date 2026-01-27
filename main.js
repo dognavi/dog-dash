@@ -271,6 +271,10 @@
   let pointerDown = false;
   let pointerX = 0;
 
+  // Mobile tap move support
+  let touchMoveDir = 0;
+  let touchMoveTimer = 0;
+  const TAP_MOVE_TIME = 0.18; // seconds
   function doJump() {
     if (!running || gameOver) return;
     if (player.jumpsLeft <= 0) return;
@@ -1032,9 +1036,14 @@
     if (keys.has("ArrowRight") || keys.has("d") || keys.has("D")) ax += 1;
 
     if (pointerDown) {
-      const px = pointerX - canvas.getBoundingClientRect().left;
-      if (px < W * 0.45) ax -= 0.35;
-      if (px > W * 0.55) ax += 0.35;
+      const rect = canvas.getBoundingClientRect();
+      const px = pointerX - rect.left;
+      if (px < W * 0.45) ax -= 0.55;
+      if (px > W * 0.55) ax += 0.55;
+    }
+    // quick tap nudge (mobile)
+    if (touchMoveTimer > 0) {
+      ax += touchMoveDir * 0.55;
     }
 
     player.vx = ax * 320;
@@ -1684,6 +1693,8 @@ function drawImageCover(g, img) {
 
     if (warningT > 0) warningT -= dt;
 
+
+    if (touchMoveTimer > 0) touchMoveTimer = Math.max(0, touchMoveTimer - dt);
     updateSpawnQueue(dt);
     updateSpawns(dt);
     updatePlayer(dt);
@@ -1926,21 +1937,43 @@ SCORE：${score}
   window.addEventListener("keyup", (e) => { keys.delete(e.key); });
 
   canvas.addEventListener("pointerdown", (e) => {
+    // prevent page scroll / pinch on mobile
+    e.preventDefault?.();
     pointerDown = true;
     pointerX = e.clientX;
-    doJump();
+
+    const rect = canvas.getBoundingClientRect();
+    const lx = e.clientX - rect.left;
+    const ly = e.clientY - rect.top;
+
+    // tap-move: bottom area = move, top area = jump
+    if (ly < H * 0.62) {
+      doJump();
+    } else {
+      if (lx < W * 0.45) { touchMoveDir = -1; touchMoveTimer = TAP_MOVE_TIME; }
+      else if (lx > W * 0.55) { touchMoveDir = 1; touchMoveTimer = TAP_MOVE_TIME; }
+      else { touchMoveDir = 0; }
+    }
+
     canvas.setPointerCapture?.(e.pointerId);
-  });
+  }, { passive: false });
 
   canvas.addEventListener("pointermove", (e) => {
+    e.preventDefault?.();
     if (!pointerDown) return;
     pointerX = e.clientX;
-  });
+  }, { passive: false });
 
   canvas.addEventListener("pointerup", (e) => {
+    e.preventDefault?.();
     pointerDown = false;
     try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
-  });
+  }, { passive: false });
+
+  canvas.addEventListener("pointercancel", (e) => {
+    pointerDown = false;
+    try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
+  }, { passive: false });
 
   if (dogFile) {
     dogFile.addEventListener("change", (e) => {
